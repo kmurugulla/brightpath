@@ -1,0 +1,58 @@
+{
+  "definitions": [
+    {
+      "title": "Cards",
+      "id": "cards",
+      "plugins": {
+        "da": {
+          "rows": "variable",
+          "columns": 2
+        }
+      }
+    }
+  ],
+  "models": [
+    {
+      "id": "cards",
+      "fields": [
+        {
+          "component": "text",
+          "name": ".cards > ul > li > .cards-card-image img",
+          "label": "Card Image",
+          "valueType": "string",
+          "description": "Image for the card. Will be optimized automatically."
+        },
+        {
+          "component": "text",
+          "name": ".cards > ul > li > .cards-card-body h3",
+          "label": "Card Title",
+          "valueType": "string",
+          "required": true,
+          "description": "Main heading for the card"
+        },
+        {
+          "component": "richtext",
+          "name": ".cards > ul > li > .cards-card-body p",
+          "label": "Card Body",
+          "valueType": "string",
+          "description": "Card content text. Supports basic formatting."
+        },
+        {
+          "component": "text",
+          "name": ".cards > ul > li > .cards-card-body a",
+          "label": "Card Link",
+          "valueType": "string",
+          "description": "Optional link URL for the card"
+        },
+        {
+          "component": "text",
+          "name": ".cards > ul > li > .cards-card-body a",
+          "label": "Card Link Text",
+          "valueType": "string",
+          "description": "Text for the card link button"
+        }
+      ]
+    }
+  ],
+  "filters": []
+}

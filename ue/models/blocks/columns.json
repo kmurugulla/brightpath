@@ -1,0 +1,58 @@
+{
+  "definitions": [
+    {
+      "title": "Columns",
+      "id": "columns",
+      "plugins": {
+        "da": {
+          "rows": 1,
+          "columns": "variable"
+        }
+      }
+    }
+  ],
+  "models": [
+    {
+      "id": "columns",
+      "fields": [
+        {
+          "component": "select",
+          "name": "class",
+          "label": "Number of Columns",
+          "valueType": "string",
+          "options": [
+            {
+              "name": "2 Columns",
+              "value": "columns-2-cols"
+            },
+            {
+              "name": "3 Columns",
+              "value": "columns-3-cols"
+            },
+            {
+              "name": "4 Columns",
+              "value": "columns-4-cols"
+            }
+          ],
+          "description": "Select the number of columns for the layout. Applied automatically based on content."
+        },
+        {
+          "component": "richtext",
+          "name": ".columns > div > div",
+          "label": "Column Content",
+          "valueType": "string",
+          "multi": true,
+          "description": "Content for each column. Can include text, images, and links."
+        },
+        {
+          "component": "text",
+          "name": ".columns > div > div.columns-img-col img",
+          "label": "Column Image",
+          "valueType": "string",
+          "description": "Image for image-only columns"
+        }
+      ]
+    }
+  ],
+  "filters": []
+}

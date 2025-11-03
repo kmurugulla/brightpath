@@ -1,0 +1,28 @@
+{
+  "definitions": [
+    {
+      "title": "Footer",
+      "id": "footer",
+      "plugins": {
+        "da": {
+          "unsafeHTML": "<p>Footer content is managed via the /footer fragment path. Edit the footer document directly to update footer content.</p>"
+        }
+      }
+    }
+  ],
+  "models": [
+    {
+      "id": "footer",
+      "fields": [
+        {
+          "component": "text",
+          "name": "data-footer-path",
+          "label": "Footer Fragment Path",
+          "valueType": "string",
+          "description": "Path to the footer fragment. Defaults to /footer if not specified. Set via page metadata 'footer' property."
+        }
+      ]
+    }
+  ],
+  "filters": []
+}

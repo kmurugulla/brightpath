@@ -1,0 +1,28 @@
+{
+  "definitions": [
+    {
+      "title": "Header",
+      "id": "header",
+      "plugins": {
+        "da": {
+          "unsafeHTML": "<p>Header/navigation content is managed via the /nav fragment path. Edit the nav document directly to update header content.</p>"
+        }
+      }
+    }
+  ],
+  "models": [
+    {
+      "id": "header",
+      "fields": [
+        {
+          "component": "text",
+          "name": "data-nav-path",
+          "label": "Navigation Fragment Path",
+          "valueType": "string",
+          "description": "Path to the navigation fragment. Defaults to /nav if not specified. Set via page metadata 'nav' property."
+        }
+      ]
+    }
+  ],
+  "filters": []
+}
