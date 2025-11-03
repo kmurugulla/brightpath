@@ -1,0 +1,92 @@
+.embed {
+  width: unset;
+  text-align: center;
+  max-width: 800px;
+  margin: 32px auto;
+}
+
+.embed > div {
+  display: flex;
+  justify-content: center;
+}
+
+/* Twitter/X embeds */
+.embed.embed-twitter .twitter-tweet-rendered {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Instagram embeds */
+.embed.embed-instagram .instagram-media {
+  margin: 0 auto !important;
+  min-width: unset !important;
+  max-width: 540px !important;
+}
+
+/* Facebook embeds */
+.embed.embed-facebook .fb-post {
+  margin: 0 auto;
+}
+
+/* Reddit embeds */
+.embed.embed-reddit .reddit-embed-bq {
+  margin: 0 auto;
+  max-width: 800px;
+}
+
+/* Placeholder for videos with preview images */
+.embed .embed-placeholder {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  position: relative;
+}
+
+.embed .embed-placeholder > * {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  inset: 0;
+}
+
+.embed .embed-placeholder picture img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Play button styling */
+.embed .embed-placeholder-play button {
+  box-sizing: border-box;
+  position: relative;
+  display: block;
+  transform: scale(3);
+  width: 22px;
+  height: 22px;
+  border: 2px solid;
+  border-radius: 20px;
+  padding: 0;
+  background: rgb(0 0 0 / 50%);
+  color: white;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.embed .embed-placeholder-play button:hover {
+  transform: scale(3.2);
+  background: rgb(0 0 0 / 70%);
+}
+
+.embed .embed-placeholder-play button::before {
+  content: "";
+  display: block;
+  box-sizing: border-box;
+  position: absolute;
+  width: 0;
+  height: 10px;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-left: 6px solid;
+  top: 4px;
+  left: 7px;
+}

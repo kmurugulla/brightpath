@@ -9,3 +9,10 @@ helix-importer-ui
 .idea
 .vscode/
 .vscode/*
+
+# Testing temporary files
+test/tmp/*
+drafts/tmp/*
+
+# Skills cache
+.claude/skills/*/.cache/

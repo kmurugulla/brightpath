@@ -41,6 +41,54 @@ async function loadFonts() {
 }
 
 /**
+ * Builds embed blocks for social media and video platform links.
+ * @param {Element} main The container element
+ */
+function buildEmbedBlocks(main) {
+  const embedPlatforms = [
+    'youtube.com',
+    'youtu.be',
+    'vimeo.com',
+    'instagram.com',
+    'facebook.com',
+    'fb.watch',
+    'reddit.com',
+    'redd.it',
+    'twitter.com',
+    'x.com',
+  ];
+
+  const links = main.querySelectorAll('p > a');
+  links.forEach((link) => {
+    try {
+      const rawHref = link.getAttribute('href');
+      const decodedHref = decodeURIComponent(rawHref);
+      let cleanHref = decodedHref.trim();
+
+      // normalize x.com to twitter.com as Twitter widget doesn't support x.com URLs
+      if (cleanHref.includes('x.com')) {
+        cleanHref = cleanHref.replace('x.com', 'twitter.com');
+      }
+
+      const url = new URL(cleanHref);
+      const hostname = url.hostname.toLowerCase();
+      const isEmbedPlatform = embedPlatforms.some((platform) => hostname.includes(platform));
+
+      const parent = link.parentElement;
+      const isOnlyChild = parent.childElementCount === 1;
+
+      if (isEmbedPlatform && isOnlyChild) {
+        link.setAttribute('href', cleanHref);
+        const embedBlock = buildBlock('embed', { elems: [link] });
+        parent.replaceWith(embedBlock);
+      }
+    } catch (error) {
+      // Invalid URL, skip
+    }
+  });
+}
+
+/**
  * Builds all synthetic blocks in a container element.
  * @param {Element} main The container element
  */
@@ -64,6 +112,7 @@ function buildAutoBlocks(main) {
       });
     }
 
+    buildEmbedBlocks(main);
     buildHeroBlock(main);
   } catch (error) {
     // eslint-disable-next-line no-console
