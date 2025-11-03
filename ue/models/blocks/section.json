@@ -1,0 +1,39 @@
+{
+  "definitions": [
+    {
+      "title": "Section",
+      "id": "section",
+      "plugins": {
+        "da": {
+          "unsafeHTML": "<p>Section container for blocks. Use the + button to add blocks to this section.</p>"
+        }
+      }
+    }
+  ],
+  "models": [
+    {
+      "id": "section",
+      "fields": [
+        {
+          "component": "text",
+          "name": "class",
+          "label": "Section Style",
+          "valueType": "string",
+          "description": "Optional CSS class names for section styling (e.g., 'light', 'dark', 'highlight')"
+        }
+      ]
+    }
+  ],
+  "filters": [
+    {
+      "id": "section",
+      "components": [
+        "cards",
+        "columns",
+        "hero",
+        "header",
+        "footer"
+      ]
+    }
+  ]
+}

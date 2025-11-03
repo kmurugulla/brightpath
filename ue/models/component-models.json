@@ -140,6 +140,18 @@
           "description": "Minimum height for the hero section in pixels. Default is 300px."
         }
       ]
+    },
+    {
+      "id": "section",
+      "fields": [
+        {
+          "component": "text",
+          "name": "class",
+          "label": "Section Style",
+          "valueType": "string",
+          "description": "Optional CSS class names for section styling (e.g., 'light', 'dark', 'highlight')"
+        }
+      ]
     }
   ]
 }

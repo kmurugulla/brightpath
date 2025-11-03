@@ -1,3 +1,14 @@
 {
-  "filters": []
+  "filters": [
+    {
+      "id": "section",
+      "components": [
+        "cards",
+        "columns",
+        "hero",
+        "header",
+        "footer"
+      ]
+    }
+  ]
 }
