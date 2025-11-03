@@ -83,65 +83,6 @@
       ]
     },
     {
-      "id": "footer",
-      "fields": [
-        {
-          "component": "text",
-          "name": "data-footer-path",
-          "label": "Footer Fragment Path",
-          "valueType": "string",
-          "description": "Path to the footer fragment. Defaults to /footer if not specified. Set via page metadata 'footer' property."
-        }
-      ]
-    },
-    {
-      "id": "header",
-      "fields": [
-        {
-          "component": "text",
-          "name": "data-nav-path",
-          "label": "Navigation Fragment Path",
-          "valueType": "string",
-          "description": "Path to the navigation fragment. Defaults to /nav if not specified. Set via page metadata 'nav' property."
-        }
-      ]
-    },
-    {
-      "id": "hero",
-      "fields": [
-        {
-          "component": "text",
-          "name": ".hero picture img",
-          "label": "Hero Background Image",
-          "valueType": "string",
-          "required": true,
-          "description": "Background image for the hero section. Will be positioned absolutely to cover the entire hero area."
-        },
-        {
-          "component": "text",
-          "name": ".hero h1",
-          "label": "Hero Heading",
-          "valueType": "string",
-          "required": true,
-          "description": "Main heading text for the hero banner. Displayed with high contrast over the background image."
-        },
-        {
-          "component": "richtext",
-          "name": ".hero p",
-          "label": "Hero Description",
-          "valueType": "string",
-          "description": "Optional description or subtitle text for the hero section."
-        },
-        {
-          "component": "number",
-          "name": "data-min-height",
-          "label": "Minimum Height (px)",
-          "valueType": "number",
-          "description": "Minimum height for the hero section in pixels. Default is 300px."
-        }
-      ]
-    },
-    {
       "id": "section",
       "fields": [
         {
