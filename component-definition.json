@@ -126,6 +126,28 @@
           }
         },
         {
+          "title": "Quote",
+          "id": "quote",
+          "plugins": {
+            "da": {
+              "name": "quote",
+              "rows": 1,
+              "columns": 1
+            }
+          }
+        },
+        {
+          "title": "Search",
+          "id": "search",
+          "plugins": {
+            "da": {
+              "name": "search",
+              "rows": 1,
+              "columns": 1
+            }
+          }
+        },
+        {
           "title": "Section",
           "id": "section",
           "plugins": {
@@ -149,6 +171,17 @@
           "plugins": {
             "da": {
               "unsafeHTML": "<div><div><p></p></div><div></div></div>"
+            }
+          }
+        },
+        {
+          "title": "Video",
+          "id": "video",
+          "plugins": {
+            "da": {
+              "name": "video",
+              "rows": 1,
+              "columns": 1
             }
           }
         }
