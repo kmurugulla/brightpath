@@ -181,15 +181,6 @@
           }
         },
         {
-          "title": "Section",
-          "id": "section",
-          "plugins": {
-            "da": {
-              "unsafeHTML": "<p>Section container for blocks. Use the + button to add blocks to this section.</p>"
-            }
-          }
-        },
-        {
           "title": "Tabs",
           "id": "tabs",
           "plugins": {
