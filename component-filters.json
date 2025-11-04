@@ -1,0 +1,11 @@
+{
+  "filters": [
+    {
+      "id": "section",
+      "components": [
+        "cards",
+        "columns"
+      ]
+    }
+  ]
+}

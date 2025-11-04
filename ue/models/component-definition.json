@@ -1,0 +1,33 @@
+{
+  "definitions": [
+    {
+      "title": "Cards",
+      "id": "cards",
+      "plugins": {
+        "da": {
+          "rows": "variable",
+          "columns": 2
+        }
+      }
+    },
+    {
+      "title": "Columns",
+      "id": "columns",
+      "plugins": {
+        "da": {
+          "rows": 1,
+          "columns": "variable"
+        }
+      }
+    },
+    {
+      "title": "Section",
+      "id": "section",
+      "plugins": {
+        "da": {
+          "unsafeHTML": "<p>Section container for blocks. Use the + button to add blocks to this section.</p>"
+        }
+      }
+    }
+  ]
+}
