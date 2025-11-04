@@ -5,8 +5,30 @@
       "id": "columns",
       "plugins": {
         "da": {
+          "name": "columns",
           "rows": 1,
-          "columns": "variable"
+          "columns": 2,
+          "behaviour": "columns"
+        }
+      }
+    },
+    {
+      "title": "Columns Row",
+      "id": "columns-row",
+      "plugins": {
+        "da": {
+          "name": "columns-row",
+          "behaviour": "columns-row"
+        }
+      }
+    },
+    {
+      "title": "Columns Cell",
+      "id": "columns-cell",
+      "plugins": {
+        "da": {
+          "unsafeHTML": "<div></div>",
+          "behaviour": "columns-cell"
         }
       }
     }
@@ -16,43 +38,36 @@
       "id": "columns",
       "fields": [
         {
-          "component": "select",
-          "name": "class",
+          "component": "number",
+          "valueType": "number",
+          "name": "columns",
           "label": "Number of Columns",
-          "valueType": "string",
-          "options": [
-            {
-              "name": "2 Columns",
-              "value": "columns-2-cols"
-            },
-            {
-              "name": "3 Columns",
-              "value": "columns-3-cols"
-            },
-            {
-              "name": "4 Columns",
-              "value": "columns-4-cols"
-            }
-          ],
-          "description": "Select the number of columns for the layout. Applied automatically based on content."
-        },
-        {
-          "component": "richtext",
-          "name": ".columns > div > div",
-          "label": "Column Content",
-          "valueType": "string",
-          "multi": true,
-          "description": "Content for each column. Can include text, images, and links."
-        },
-        {
-          "component": "text",
-          "name": ".columns > div > div.columns-img-col img",
-          "label": "Column Image",
-          "valueType": "string",
-          "description": "Image for image-only columns"
+          "value": 2,
+          "validation": {
+            "numberMin": 1,
+            "numberMax": 6
+          }
         }
       ]
     }
   ],
-  "filters": []
+  "filters": [
+    {
+      "id": "columns",
+      "components": [
+        "columns-row"
+      ]
+    },
+    {
+      "id": "columns-row",
+      "components": []
+    },
+    {
+      "id": "columns-cell",
+      "components": [
+        "text",
+        "image"
+      ]
+    }
+  ]
 }

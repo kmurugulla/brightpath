@@ -85,43 +85,28 @@
     ]
   },
   {
-    "id": "cards",
+    "id": "card",
     "fields": [
       {
-        "component": "text",
-        "name": ".cards > ul > li > .cards-card-image img",
-        "label": "Card Image",
+        "component": "reference",
         "valueType": "string",
-        "description": "Image for the card. Will be optimized automatically."
+        "name": "div:nth-child(1)>picture:nth-child(1)>img:nth-child(3)[src]",
+        "label": "Image",
+        "multi": false
       },
       {
         "component": "text",
-        "name": ".cards > ul > li > .cards-card-body h3",
-        "label": "Card Title",
         "valueType": "string",
-        "required": true,
-        "description": "Main heading for the card"
+        "name": "div:nth-child(1)>picture:nth-child(1)>img:nth-child(3)[alt]",
+        "label": "Image Alt",
+        "multi": false
       },
       {
         "component": "richtext",
-        "name": ".cards > ul > li > .cards-card-body p",
-        "label": "Card Body",
-        "valueType": "string",
-        "description": "Card content text. Supports basic formatting."
-      },
-      {
-        "component": "text",
-        "name": ".cards > ul > li > .cards-card-body a",
-        "label": "Card Link",
-        "valueType": "string",
-        "description": "Optional link URL for the card"
-      },
-      {
-        "component": "text",
-        "name": ".cards > ul > li > .cards-card-body a",
-        "label": "Card Link Text",
-        "valueType": "string",
-        "description": "Text for the card link button"
+        "name": "div:nth-child(2)",
+        "value": "",
+        "label": "Text",
+        "valueType": "string"
       }
     ]
   },
@@ -153,40 +138,15 @@
     "id": "columns",
     "fields": [
       {
-        "component": "select",
-        "name": "class",
+        "component": "number",
+        "valueType": "number",
+        "name": "columns",
         "label": "Number of Columns",
-        "valueType": "string",
-        "options": [
-          {
-            "name": "2 Columns",
-            "value": "columns-2-cols"
-          },
-          {
-            "name": "3 Columns",
-            "value": "columns-3-cols"
-          },
-          {
-            "name": "4 Columns",
-            "value": "columns-4-cols"
-          }
-        ],
-        "description": "Select the number of columns for the layout. Applied automatically based on content."
-      },
-      {
-        "component": "richtext",
-        "name": ".columns > div > div",
-        "label": "Column Content",
-        "valueType": "string",
-        "multi": true,
-        "description": "Content for each column. Can include text, images, and links."
-      },
-      {
-        "component": "text",
-        "name": ".columns > div > div.columns-img-col img",
-        "label": "Column Image",
-        "valueType": "string",
-        "description": "Image for image-only columns"
+        "value": 2,
+        "validation": {
+          "numberMin": 1,
+          "numberMax": 6
+        }
       }
     ]
   },
