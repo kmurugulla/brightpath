@@ -137,7 +137,7 @@ const setupUEEventHandlers = () => {
             blockEl.querySelector('.tabs-list').querySelectorAll('button').forEach((btn) => {
               btn.setAttribute('aria-selected', false);
             });
-            blockEl.querySelector(`[aria-controls=${element?.id}]`).setAttribute('aria-selected', true);
+            blockEl.querySelector(`[aria-controls="${element?.id}"]`).setAttribute('aria-selected', true);
             break;
           default:
             break;
