@@ -1,11 +1,53 @@
-{
-  "filters": [
-    {
-      "id": "section",
-      "components": [
-        "cards",
-        "columns"
-      ]
-    }
-  ]
-}
+[
+  {
+    "id": "main",
+    "components": [
+      "section"
+    ]
+  },
+  {
+    "id": "section",
+    "components": [
+      "accordion",
+      "cards",
+      "carousel",
+      "columns",
+      "embed",
+      "fragment",
+      "form",
+      "hero",
+      "image",
+      "quote",
+      "search",
+      "tabs",
+      "table",
+      "text",
+      "video"
+    ]
+  },
+  {
+    "id": "accordion",
+    "components": [
+      "accordion-item"
+    ]
+  },
+  {
+    "id": "carousel",
+    "components": [
+      "carousel-item"
+    ]
+  },
+  {
+    "id": "section",
+    "components": [
+      "cards",
+      "columns"
+    ]
+  },
+  {
+    "id": "tabs",
+    "components": [
+      "tabs-item"
+    ]
+  }
+]

@@ -1,98 +1,17 @@
-{
-  "models": [
-    {
-      "id": "cards",
-      "fields": [
-        {
-          "component": "text",
-          "name": ".cards > ul > li > .cards-card-image img",
-          "label": "Card Image",
-          "valueType": "string",
-          "description": "Image for the card. Will be optimized automatically."
-        },
-        {
-          "component": "text",
-          "name": ".cards > ul > li > .cards-card-body h3",
-          "label": "Card Title",
-          "valueType": "string",
-          "required": true,
-          "description": "Main heading for the card"
-        },
-        {
-          "component": "richtext",
-          "name": ".cards > ul > li > .cards-card-body p",
-          "label": "Card Body",
-          "valueType": "string",
-          "description": "Card content text. Supports basic formatting."
-        },
-        {
-          "component": "text",
-          "name": ".cards > ul > li > .cards-card-body a",
-          "label": "Card Link",
-          "valueType": "string",
-          "description": "Optional link URL for the card"
-        },
-        {
-          "component": "text",
-          "name": ".cards > ul > li > .cards-card-body a",
-          "label": "Card Link Text",
-          "valueType": "string",
-          "description": "Text for the card link button"
-        }
-      ]
-    },
-    {
-      "id": "columns",
-      "fields": [
-        {
-          "component": "select",
-          "name": "class",
-          "label": "Number of Columns",
-          "valueType": "string",
-          "options": [
-            {
-              "name": "2 Columns",
-              "value": "columns-2-cols"
-            },
-            {
-              "name": "3 Columns",
-              "value": "columns-3-cols"
-            },
-            {
-              "name": "4 Columns",
-              "value": "columns-4-cols"
-            }
-          ],
-          "description": "Select the number of columns for the layout. Applied automatically based on content."
-        },
-        {
-          "component": "richtext",
-          "name": ".columns > div > div",
-          "label": "Column Content",
-          "valueType": "string",
-          "multi": true,
-          "description": "Content for each column. Can include text, images, and links."
-        },
-        {
-          "component": "text",
-          "name": ".columns > div > div.columns-img-col img",
-          "label": "Column Image",
-          "valueType": "string",
-          "description": "Image for image-only columns"
-        }
-      ]
-    },
-    {
-      "id": "section",
-      "fields": [
-        {
-          "component": "text",
-          "name": "class",
-          "label": "Section Style",
-          "valueType": "string",
-          "description": "Optional CSS class names for section styling (e.g., 'light', 'dark', 'highlight')"
-        }
-      ]
-    }
-  ]
-}
+[
+  {
+    "...": "./page.json#/models"
+  },
+  {
+    "...": "./text.json#/models"
+  },
+  {
+    "...": "./image.json#/models"
+  },
+  {
+    "...": "./section.json#/models"
+  },
+  {
+    "...": "./blocks/*.json#/models"
+  }
+]
