@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Adobe Office Locations</title>
+</head>
+<body>
+    <header></header>
+    <main>
+      <div>
+        <div class="header">
+          <h1>Adobe Office Locations</h1>
+        </div>
+      </div>
+
+      {{#data}}
+      <div>
+        <div class="location">
+          <div>
+            <div>
+              <h3>{{city}}{{#officeType}} - {{officeType}}{{/officeType}}</h3>
+              <p><strong>Region:</strong> {{region}}</p>
+              <p><strong>Country:</strong> {{country}}</p>
+              
+              <div class="location-address">
+                <h4>Address</h4>
+                {{#street}}<p>{{street}}</p>{{/street}}
+                {{#suite}}<p>{{suite}}</p>{{/suite}}
+                {{#unit}}<p>{{unit}}</p>{{/unit}}
+                {{#building}}<p>{{building}}</p>{{/building}}
+                {{#floor}}<p>{{floor}}</p>{{/floor}}
+                {{#buildingName}}<p>{{buildingName}}</p>{{/buildingName}}
+                {{#tower}}<p>{{tower}}</p>{{/tower}}
+                {{#studio}}<p>{{studio}}</p>{{/studio}}
+                {{#campus}}<p>{{campus}}</p>{{/campus}}
+                {{#coworking}}<p>{{coworking}}</p>{{/coworking}}
+                {{#plot}}<p>{{plot}}</p>{{/plot}}
+                {{#block}}<p>{{block}}</p>{{/block}}
+                {{#corner}}<p>{{corner}}</p>{{/corner}}
+                {{#area}}<p>{{area}}</p>{{/area}}
+                {{#neighborhood}}<p>{{neighborhood}}</p>{{/neighborhood}}
+                {{#district}}<p>{{district}}</p>{{/district}}
+                <p>{{#city}}{{city}}{{/city}}{{#state}}, {{state}}{{/state}}{{#province}}, {{province}}{{/province}}{{#zip}} {{zip}}{{/zip}}{{#postalCode}} {{postalCode}}{{/postalCode}}</p>
+                {{#country}}<p>{{country}}</p>{{/country}}
+              </div>
+
+              <div class="location-contact">
+                {{#phone}}<p><strong>Phone:</strong> <a href="tel:{{phone}}">{{phone}}</a></p>{{/phone}}
+                {{#fax}}<p><strong>Fax:</strong> {{fax}}</p>{{/fax}}
+              </div>
+
+              {{#notes}}<div class="location-notes"><p><em>{{notes}}</em></p></div>{{/notes}}
+            </div>
+          </div>
+        </div>
+      </div>
+      {{/data}}
+
+    </main>
+    <footer></footer>
+</body>
+</html>
