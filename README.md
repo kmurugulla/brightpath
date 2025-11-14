@@ -2,8 +2,8 @@
 Your project's description...
 
 ## Environments
-- Preview: https://main--{repo}--{owner}.aem.page/
-- Live: https://main--{repo}--{owner}.aem.live/
+- Preview: https://{branch}--{repo}--{owner}.aem.page/
+- Live: https://{branch}--{repo}--{owner}.aem.live/
 
 ## Documentation
 
@@ -31,7 +31,7 @@ npm run lint
 
 Performance tests **automatically run on every PR** against the branch's preview URL:
 - **Triggers:** When you create a PR to `main`
-- **Tests:** Branch preview URL (e.g., `https://your-branch--brightpath--kmurugulla.aem.live`)
+- **Tests:** Branch preview URL (e.g., `https://{branch}--{repo}--{owner}.aem.live`)
 - **Paths:** Configured in `.github/workflows/performance-budget.yml` (env `PERF_TEST_PATHS`)
 - **Results:** Posted as a comment on the PR
 
@@ -50,10 +50,10 @@ npm run perftest
 npm run perftest -- /about /contact
 
 # Test branch preview URL
-node scripts/perf.js --url https://your-branch--brightpath--kmurugulla.aem.live / /about
+npm run perftest -- --url https://{branch}--{repo}--{owner}.aem.live / /about
 
 # Test production
-node scripts/perf.js --url https://main--brightpath--kmurugulla.aem.live
+npm run perftest -- --url https://{branch}--{repo}--{owner}.aem.live
 
 # Check file sizes
 npm run perftest:size
