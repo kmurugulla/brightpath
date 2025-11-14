@@ -84,21 +84,45 @@ jobs:
         with:
           script: |
             const fs = require('fs');
+            const path = require('path');
             const branchUrl = '${{ steps.branch-url.outputs.base_url }}';
             const perfResult = '${{ steps.perf-test.outcome }}';
             const sizeResult = '${{ steps.size-check.outcome }}';
             
-            let comment = `## 📊 Performance Test Results\n\n`;
-            comment += `**Branch URL:** ${branchUrl}\n`;
-            comment += `**Tested Paths:** \`${{ env.PERF_TEST_PATHS }}\`\n\n`;
+            let comment = '';
             
-            comment += `### Results\n`;
-            comment += perfResult === 'success' ? '✅ **Performance checks passed**\n' : '❌ **Performance checks failed**\n';
-            comment += sizeResult === 'success' ? '✅ **Bundle size checks passed**\n' : '❌ **Bundle size checks failed**\n';
-            
-            comment += `\n### 📁 Artifacts\n`;
-            comment += `Full Lighthouse reports are available in the workflow artifacts.\n\n`;
-            comment += `[View workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})\n`;
+            // Try to read the generated markdown summary
+            const summaryPath = '.lighthouseci/summary.md';
+            if (fs.existsSync(summaryPath)) {
+              let summary = fs.readFileSync(summaryPath, 'utf-8');
+              
+              // Replace placeholder values with actual GitHub context
+              summary = summary.replace(/\$\{GITHUB_REPOSITORY\}/g, '${{ github.repository }}');
+              summary = summary.replace(/\$\{GITHUB_RUN_ID\}/g, '${{ github.run_id }}');
+              
+              comment += `**Branch URL:** [${branchUrl}](${branchUrl})\n\n`;
+              comment += summary;
+              
+              // Add bundle size results
+              comment += `\n### 📦 Bundle Size Check\n`;
+              comment += sizeResult === 'success' 
+                ? '✅ **Bundle size checks passed**\n' 
+                : '❌ **Bundle size checks failed**\n';
+              
+            } else {
+              // Fallback to simple comment if markdown file not found
+              comment = `## 📊 Performance Test Results\n\n`;
+              comment += `**Branch URL:** ${branchUrl}\n`;
+              comment += `**Tested Paths:** \`${{ env.PERF_TEST_PATHS }}\`\n\n`;
+              
+              comment += `### Results\n`;
+              comment += perfResult === 'success' ? '✅ **Performance checks passed**\n' : '❌ **Performance checks failed**\n';
+              comment += sizeResult === 'success' ? '✅ **Bundle size checks passed**\n' : '❌ **Bundle size checks failed**\n';
+              
+              comment += `\n### 📁 Artifacts\n`;
+              comment += `Full Lighthouse reports are available in the workflow artifacts.\n\n`;
+              comment += `[View workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})\n`;
+            }
             
             github.rest.issues.createComment({
               issue_number: context.issue.number,

@@ -2,8 +2,8 @@
 /* eslint-disable no-console */
 
 import { spawn } from 'child_process';
-import { readFileSync, readdirSync } from 'fs';
-import { join } from 'path';
+import { readFileSync, readdirSync, writeFileSync, mkdirSync } from 'fs';
+import { join, dirname } from 'path';
 
 const args = process.argv.slice(2);
 
@@ -67,6 +67,7 @@ lhci.on('close', (exitCode) => {
     }
 
     let globalAllPassed = true;
+    const markdownResults = [];
 
     files.forEach((file, index) => {
       const reportPath = join(lhciDir, file);
@@ -345,14 +346,141 @@ lhci.on('close', (exitCode) => {
         console.log('❌ Some checks failed for this page.\n');
         globalAllPassed = false;
       }
+
+      // Build markdown for this page
+      const pageStatus = allPassed ? '✅' : '❌';
+      const perfScore = (report.categories.performance.score * 100).toFixed(0);
+      const pathName = new URL(testedUrl).pathname || '/';
+
+      let markdown = `\n<details${allPassed ? '' : ' open'}>\n`;
+      markdown += `<summary>${pageStatus} <code>${pathName}</code> • Performance Score: ${perfScore}/100</summary>\n\n`;
+      markdown += '#### Performance Metrics\n\n';
+      markdown += '| Test | Status | Current Value | Target |\n';
+      markdown += '|------|--------|---------------|--------|\n';
+
+      checks.forEach((check) => {
+        const isScore = check.test.includes('Score');
+        const isCLS = check.test === 'Cumulative Layout Shift';
+
+        let displayValue = check.value;
+        if (isScore) {
+          displayValue = (check.value * 100).toFixed(0);
+        } else if (isCLS) {
+          displayValue = check.value.toFixed(3);
+        } else if (check.unit === 'KB') {
+          displayValue = (check.value / 1024).toFixed(0);
+        } else {
+          displayValue = Math.round(check.value);
+        }
+
+        let displayThreshold = check.threshold;
+        if (isScore) {
+          displayThreshold = (check.threshold * 100).toFixed(0);
+        } else if (isCLS) {
+          displayThreshold = check.threshold.toFixed(3);
+        } else if (check.unit === 'KB') {
+          displayThreshold = (check.threshold / 1024).toFixed(0);
+        }
+
+        let passed;
+        if (isScore) {
+          passed = check.value >= check.threshold;
+        } else {
+          passed = check.value <= check.threshold;
+        }
+
+        const status = passed ? '✅' : '❌';
+        const unit = isScore ? '%' : check.unit;
+        const comparison = isScore
+          ? `≥ ${displayThreshold}${unit}`
+          : `< ${displayThreshold}${unit}`;
+
+        markdown += `| ${check.test} | ${status} | **${displayValue}${unit}** | ${comparison} |\n`;
+      });
+
+      // Add issues section if there are failures
+      if (!allPassed) {
+        markdown += '\n#### 🔍 Issues Found\n\n';
+        checks.forEach((check) => {
+          const isScore = check.test.includes('Score');
+          const isCLS = check.test === 'Cumulative Layout Shift';
+          let passed;
+          if (isScore) {
+            passed = check.value >= check.threshold;
+          } else {
+            passed = check.value <= check.threshold;
+          }
+
+          if (!passed) {
+            let displayValue = check.value;
+            if (isScore) {
+              displayValue = (check.value * 100).toFixed(0);
+            } else if (isCLS) {
+              displayValue = check.value.toFixed(3);
+            } else if (check.unit === 'KB') {
+              displayValue = (check.value / 1024).toFixed(0);
+            } else {
+              displayValue = Math.round(check.value);
+            }
+            const unit = isScore ? '%' : check.unit;
+
+            markdown += `**${check.test}** (${displayValue}${unit})\n`;
+            markdown += `- ${check.advice}\n`;
+
+            if (check.diagnostics) {
+              const details = check.diagnostics();
+              if (details.length > 0) {
+                details.forEach((detail) => {
+                  markdown += `${detail}\n`;
+                });
+              }
+            }
+            markdown += '\n';
+          }
+        });
+      }
+
+      markdown += `\n[🔗 View Page](${testedUrl})\n`;
+      markdown += '</details>\n';
+
+      markdownResults.push(markdown);
     });
 
     console.log(`\n${'='.repeat(90)}`);
     if (globalAllPassed) {
       console.log('✅ All performance checks passed across all pages!\n');
-      process.exit(0);
     } else {
       console.log('❌ Performance checks failed on one or more pages. Please optimize before committing.\n');
+    }
+
+    // Write markdown summary
+    const passedCount = files.filter((file, index) => {
+      const reportPath = join(lhciDir, file);
+      const report = JSON.parse(readFileSync(reportPath, 'utf-8'));
+      const perfScore = report.categories.performance.score;
+      return perfScore >= 0.9;
+    }).length;
+    const totalCount = files.length;
+
+    let fullMarkdown = `## 🚀 Performance Test Results\n\n`;
+    fullMarkdown += `**Status:** ${globalAllPassed ? '✅ All Passed' : '⚠️ Some Failed'} • `;
+    fullMarkdown += `**Pages:** ${passedCount}/${totalCount} passed\n\n`;
+    fullMarkdown += `---\n\n`;
+    fullMarkdown += `### 📄 Results by Page\n`;
+    fullMarkdown += markdownResults.join('\n');
+    fullMarkdown += `\n---\n\n`;
+    fullMarkdown += `<sub>🤖 Automated by Lighthouse CI • `;
+    fullMarkdown += `[View Full Reports](https://github.com/$\{GITHUB_REPOSITORY}/actions/runs/$\{GITHUB_RUN_ID})</sub>\n`;
+
+    // Ensure .lighthouseci directory exists
+    mkdirSync(lhciDir, { recursive: true });
+    const summaryPath = join(lhciDir, 'summary.md');
+    writeFileSync(summaryPath, fullMarkdown, 'utf-8');
+    console.log(`📝 Markdown summary written to ${summaryPath}\n`);
+
+    if (globalAllPassed) {
+      process.exit(0);
+    } else {
       process.exit(1);
     }
   } catch (error) {
