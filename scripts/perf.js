@@ -32,17 +32,10 @@ const spinner = setInterval(() => {
   frameIndex = (frameIndex + 1) % frames.length;
 }, 80);
 
-const env = {
-  ...process.env,
-  PERF_PATHS: paths.join(','),
-  PERF_URL: baseUrl,
-};
-
 const urlArgs = urls.split(', ').flatMap((url) => ['--url', url]);
-const lhciArgs = ['lhci', 'collect', '--config', 'lighthouserc.js', ...urlArgs];
+const lhciArgs = ['lhci', 'collect', '--numberOfRuns=1', '--config', 'lighthouserc.js', ...urlArgs];
 
 const lhci = spawn('npx', lhciArgs, {
-  env,
   stdio: 'pipe',
 });
 
@@ -88,7 +81,92 @@ lhci.on('close', (exitCode) => {
       const getDiagnostics = (rep, type) => {
         const diagnostics = [];
 
-        if (type === 'fcp' || type === 'lcp') {
+        if (type === 'lcp') {
+          const lcpTime = rep.audits['largest-contentful-paint'].numericValue;
+          const networkRequests = rep.audits['network-requests'];
+          const ttfb = rep.audits['server-response-time']?.numericValue || 0;
+          const fcp = rep.audits['first-contentful-paint']?.numericValue || 0;
+
+          if (networkRequests?.details?.items) {
+            const beforeLCP = networkRequests.details.items
+              .filter((item) => (item.networkRequestTime || 0) * 1000 < lcpTime)
+              .filter((item) => !item.url.includes('livereload'));
+
+            const byType = {
+              Script: beforeLCP.filter((r) => r.resourceType === 'Script'),
+              Stylesheet: beforeLCP.filter((r) => r.resourceType === 'Stylesheet'),
+              Image: beforeLCP.filter((r) => r.resourceType === 'Image'),
+              Font: beforeLCP.filter((r) => r.resourceType === 'Font'),
+              Document: beforeLCP.filter((r) => r.resourceType === 'Document'),
+              Other: beforeLCP.filter((r) => !['Script', 'Stylesheet', 'Image', 'Font', 'Document'].includes(r.resourceType)),
+            };
+
+            const totalSize = Object.values(byType)
+              .flat()
+              .reduce((sum, item) => sum + (item.transferSize || 0), 0);
+            const totalSizeKB = Math.round(totalSize / 1024);
+
+            diagnostics.push(`  • Resources loaded BEFORE LCP (${Math.round(lcpTime)}ms):`);
+            Object.entries(byType).forEach(([resourceType, items]) => {
+              if (items.length > 0) {
+                const typeSize = items.reduce((sum, item) => sum + (item.transferSize || 0), 0);
+                const typeSizeKB = Math.round(typeSize / 1024);
+                diagnostics.push(`    - ${items.length} ${resourceType.toLowerCase()}${items.length > 1 ? 's' : ''} (${typeSizeKB}KB)`);
+              }
+            });
+            diagnostics.push(`    - TOTAL: ${totalSizeKB}KB ${totalSizeKB > 100 ? '⚠️  (exceeds 100KB recommendation)' : '✓'}`);
+
+            const topHeavy = beforeLCP
+              .sort((a, b) => (b.transferSize || 0) - (a.transferSize || 0))
+              .slice(0, 3)
+              .filter((item) => (item.transferSize || 0) > 10240);
+
+            if (topHeavy.length > 0) {
+              diagnostics.push('  • Heaviest resources before LCP:');
+              topHeavy.forEach((item) => {
+                const { url, transferSize, resourceType } = item;
+                const fileName = url.split('/').pop() || url;
+                const size = Math.round((transferSize || 0) / 1024);
+                diagnostics.push(`    - ${fileName} (${resourceType}, ${size}KB)`);
+              });
+            }
+
+            if (totalSizeKB < 100) {
+              diagnostics.push('  • Root cause analysis:');
+              diagnostics.push(`    - TTFB (server response): ${Math.round(ttfb)}ms`);
+              diagnostics.push(`    - FCP (first paint): ${Math.round(fcp)}ms`);
+              diagnostics.push(`    - LCP delay: ${Math.round(lcpTime - fcp)}ms after first paint`);
+
+              if (ttfb > 600) {
+                diagnostics.push('    → Slow server response is the main bottleneck');
+              } else if (lcpTime - fcp > 1000) {
+                diagnostics.push('    → LCP element is rendering late after initial paint');
+              } else if (fcp > 1800) {
+                diagnostics.push('    → First paint is delayed (CSS/font blocking)');
+              } else {
+                diagnostics.push('    → LCP timing is close to threshold (may pass on retry)');
+              }
+            }
+          }
+
+          const lcpElement = rep.audits['largest-contentful-paint-element'];
+          const lcpNode = lcpElement?.details?.items?.[0];
+          if (lcpNode) {
+            diagnostics.push(`  • LCP Element: ${lcpNode.node.nodeLabel || 'Unknown'}`);
+          }
+
+          const renderBlocking = rep.audits['render-blocking-resources'];
+          if (renderBlocking?.details?.items?.length > 0) {
+            diagnostics.push('  • Render-blocking resources:');
+            renderBlocking.details.items.slice(0, 3).forEach((item) => {
+              const fileName = item.url.split('/').pop();
+              const wastedMs = Math.round(item.wastedMs || 0);
+              diagnostics.push(`    - ${fileName} (delays by ${wastedMs}ms)`);
+            });
+          }
+        }
+
+        if (type === 'fcp') {
           const networkRequests = rep.audits['network-requests'];
           if (networkRequests?.details?.items) {
             const cssJs = networkRequests.details.items
@@ -97,24 +175,14 @@ lhci.on('close', (exitCode) => {
               .sort((a, b) => (b.transferSize || 0) - (a.transferSize || 0))
               .slice(0, 3);
 
-            cssJs.forEach((item) => {
-              const size = ((item.transferSize || 0) / 1024).toFixed(0);
-              const fileName = item.url.split('/').pop() || item.url;
-              const fileType = item.resourceType === 'Script' ? 'JS' : 'CSS';
-              diagnostics.push(`  • ${fileType}: ${fileName} (${size}KB)`);
-            });
-          }
-
-          if (type === 'lcp') {
-            const bootupTime = rep.audits['bootup-time'];
-            if (bootupTime?.details?.items?.length > 0) {
-              const topScript = bootupTime.details.items
-                .filter((item) => !item.url.includes('Unattributable'))
-                .sort((a, b) => (b.scripting || 0) - (a.scripting || 0))[0];
-              if (topScript && topScript.scripting > 100) {
-                const time = Math.round(topScript.scripting);
-                diagnostics.push(`  • Slow script execution: ${time}ms`);
-              }
+            if (cssJs.length > 0) {
+              diagnostics.push('  • Largest CSS/JS files:');
+              cssJs.forEach((item) => {
+                const size = ((item.transferSize || 0) / 1024).toFixed(0);
+                const fileName = item.url.split('/').pop() || item.url;
+                const fileType = item.resourceType === 'Script' ? 'JS' : 'CSS';
+                diagnostics.push(`    - ${fileType}: ${fileName} (${size}KB)`);
+              });
             }
           }
         }
@@ -165,14 +233,8 @@ lhci.on('close', (exitCode) => {
           value: report.audits['largest-contentful-paint'].numericValue,
           threshold: 2500,
           unit: 'ms',
-          advice: 'Close to target - eagerly load LCP resources, defer non-critical scripts',
-          diagnostics: () => {
-            const diff = report.audits['largest-contentful-paint'].numericValue - 2500;
-            if (diff < 100 && diff > 0) {
-              return [];
-            }
-            return getDiagnostics(report, 'lcp');
-          },
+          advice: 'See root cause analysis below',
+          diagnostics: () => getDiagnostics(report, 'lcp'),
         },
         {
           test: 'Render Blocking Resources',
