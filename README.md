@@ -1,9 +1,9 @@
-# Your Project's Title...
-Your project's description...
+# Brightpath
+EDS Experiementation 
 
 ## Environments
-- Preview: https://{branch}--{repo}--{owner}.aem.page/
-- Live: https://{branch}--{repo}--{owner}.aem.live/
+- Preview: https://main--brightpath--kmurugulla.aem.page/
+- Live: https://main--brightpath--kmurugulla.aem.live/
 
 ## Documentation
 
