@@ -27,6 +27,8 @@ npm run lint
 
 ## Performance Budget
 
+For detailed setup instructions and documentation, see [PERFORMANCE_BUDGET_SETUP.md](./PERFORMANCE_BUDGET_SETUP.md).
+
 ### Automated Testing (GitHub Actions)
 
 Performance tests **automatically run on every PR** against the branch's preview URL:
