@@ -25,6 +25,40 @@ npm i
 npm run lint
 ```
 
+## Performance Budget
+
+### Automated Testing (GitHub Actions)
+
+Performance tests **automatically run on every PR** against the branch's preview URL:
+- **Triggers:** When you create a PR to `main`
+- **Tests:** Branch preview URL (e.g., `https://your-branch--brightpath--kmurugulla.aem.live`)
+- **Paths:** Configured in `.github/workflows/performance-budget.yml` (env `PERF_TEST_PATHS`)
+- **Results:** Posted as a comment on the PR
+
+**To configure tested paths**, edit `.github/workflows/performance-budget.yml`:
+
+```yaml
+env:
+  PERF_TEST_PATHS: '/ /da-demo /ue-editor/demo'
+```
+
+### Manual Testing (Local)
+
+```sh
+# Test localhost
+npm run perftest
+npm run perftest -- /about /contact
+
+# Test branch preview URL
+node scripts/perf.js --url https://your-branch--brightpath--kmurugulla.aem.live / /about
+
+# Test production
+node scripts/perf.js --url https://main--brightpath--kmurugulla.aem.live
+
+# Check file sizes
+npm run perftest:size
+```
+
 ## Local development
 
 1. Create a new repository based on the `aem-boilerplate` template

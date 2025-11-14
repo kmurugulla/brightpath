@@ -16,3 +16,6 @@ drafts/tmp/*
 
 # Skills cache
 .claude/skills/*/.cache/
+
+# Performance reports
+.lighthouseci/

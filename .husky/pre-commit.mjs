@@ -13,7 +13,6 @@ try {
   const changeset = await run('git diff --cached --name-only --diff-filter=ACMR');
   const modifiedFiles = changeset.split('\n').filter(Boolean);
 
-  // check if there are any model files staged
   const modifledPartials = modifiedFiles.filter((file) => file.match(/^ue\/models\/.*\.json/));
   if (modifledPartials.length > 0) {
     console.log('UE model files changed, rebuilding component JSON files...');

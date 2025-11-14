@@ -13,8 +13,37 @@
     "build:json:models": "merge-json-cli -i \"ue/models/component-models.json\" -o \"component-models.json\"",
     "build:json:definitions": "merge-json-cli -i \"ue/models/component-definition.json\" -o \"component-definition.json\"",
     "build:json:filters": "merge-json-cli -i \"ue/models/component-filters.json\" -o \"component-filters.json\"",
+    "perftest": "node scripts/perf.js",
+    "perftest:size": "node scripts/size.js",
     "prepare": "husky"
   },
+  "bundlesize": [
+    {
+      "path": "./scripts/*.js",
+      "maxSize": "50 KB",
+      "compression": "gzip"
+    },
+    {
+      "path": "./blocks/**/*.js",
+      "maxSize": "15 KB",
+      "compression": "gzip"
+    },
+    {
+      "path": "./styles/*.css",
+      "maxSize": "10 KB",
+      "compression": "gzip"
+    },
+    {
+      "path": "./blocks/**/*.css",
+      "maxSize": "5 KB",
+      "compression": "gzip"
+    },
+    {
+      "path": "./fonts/*.woff2",
+      "maxSize": "100 KB",
+      "compression": "gzip"
+    }
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/adobe/aem-boilerplate.git"
@@ -27,6 +56,8 @@
   "homepage": "https://github.com/adobe/aem-boilerplate#readme",
   "devDependencies": {
     "@babel/eslint-parser": "7.28.5",
+    "@lhci/cli": "^0.14.0",
+    "bundlesize": "^0.18.2",
     "eslint": "8.57.1",
     "eslint-config-airbnb-base": "15.0.0",
     "eslint-plugin-import": "2.32.0",

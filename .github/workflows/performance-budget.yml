@@ -1,0 +1,106 @@
+name: Performance Budget
+
+on:
+  pull_request:
+    branches: [main]
+
+env:
+  PERF_TEST_PATHS: '/ /da-demo /ue-editor/demo'
+
+jobs:
+  performance-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Branch URL
+        id: branch-url
+        run: |
+          BRANCH_NAME="${{ github.head_ref }}"
+          BASE_URL="https://${BRANCH_NAME}--brightpath--kmurugulla.aem.live"
+          echo "base_url=${BASE_URL}" >> $GITHUB_OUTPUT
+          echo "Testing branch: ${BRANCH_NAME}"
+          echo "Base URL: ${BASE_URL}"
+
+      - name: Wait for Preview to be Ready
+        run: |
+          echo "Waiting for preview site to be available..."
+          for i in {1..30}; do
+            if curl -s -o /dev/null -w "%{http_code}" "${{ steps.branch-url.outputs.base_url }}/" | grep -q "200"; then
+              echo "✅ Preview site is ready!"
+              exit 0
+            fi
+            echo "Waiting... (attempt $i/30)"
+            sleep 10
+          done
+          echo "⚠️ Preview site not ready, but continuing anyway..."
+
+      - name: Run Performance Tests
+        id: perf-test
+        run: |
+          echo "🎯 Testing performance on branch preview URL..."
+          echo "Base URL: ${{ steps.branch-url.outputs.base_url }}"
+          echo "Paths: ${{ env.PERF_TEST_PATHS }}"
+          
+          node scripts/perf.js --url "${{ steps.branch-url.outputs.base_url }}" ${{ env.PERF_TEST_PATHS }}
+        continue-on-error: true
+
+      - name: Check Bundle Sizes
+        id: size-check
+        run: npm run perftest:size
+        continue-on-error: true
+
+      - name: Upload Lighthouse Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-results
+          path: .lighthouseci/
+          retention-days: 30
+
+      - name: Comment on PR
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const branchUrl = '${{ steps.branch-url.outputs.base_url }}';
+            const perfResult = '${{ steps.perf-test.outcome }}';
+            const sizeResult = '${{ steps.size-check.outcome }}';
+            
+            let comment = `## 📊 Performance Test Results\n\n`;
+            comment += `**Branch URL:** ${branchUrl}\n`;
+            comment += `**Tested Paths:** \`${{ env.PERF_TEST_PATHS }}\`\n\n`;
+            
+            comment += `### Results\n`;
+            comment += perfResult === 'success' ? '✅ **Performance checks passed**\n' : '❌ **Performance checks failed**\n';
+            comment += sizeResult === 'success' ? '✅ **Bundle size checks passed**\n' : '❌ **Bundle size checks failed**\n';
+            
+            comment += `\n### 📁 Artifacts\n`;
+            comment += `Full Lighthouse reports are available in the workflow artifacts.\n\n`;
+            comment += `[View workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})\n`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Fail if Performance Checks Failed
+        if: steps.perf-test.outcome == 'failure' || steps.size-check.outcome == 'failure'
+        run: |
+          echo "❌ Performance checks failed. Please review the results and optimize before merging."
+          exit 1
+
