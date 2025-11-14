@@ -2,10 +2,9 @@
 /* eslint-disable no-console */
 
 import { spawn } from 'child_process';
-import { statSync, readdirSync } from 'fs';
-import { join, relative } from 'path';
+import { readdirSync, readFileSync } from 'fs';
+import { join } from 'path';
 import { gzipSync } from 'zlib';
-import { readFileSync } from 'fs';
 
 const cyan = '\x1b[96m';
 const reset = '\x1b[0m';
@@ -28,7 +27,7 @@ bundlesize.stderr.on('data', (data) => {
   output += data.toString();
 });
 
-bundlesize.on('close', (exitCode) => {
+bundlesize.on('close', () => {
   clearInterval(spinner);
   process.stdout.write('\r\x1b[K');
 
@@ -106,4 +105,3 @@ bundlesize.on('close', (exitCode) => {
     process.exit(1);
   }
 });
-
