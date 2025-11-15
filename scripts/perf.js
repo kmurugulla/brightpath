@@ -344,48 +344,51 @@ lhci.on('close', (exitCode) => {
 
       let markdown = `\n<details${allPassed ? '' : ' open'}>\n`;
       markdown += `<summary>${pageStatus} <code>${pathName}</code> • Performance Score: ${perfScore}/100</summary>\n\n`;
-      markdown += '#### Performance Metrics\n\n';
-      markdown += '| Test | Status | Current Value | Target |\n';
-      markdown += '|------|--------|---------------|--------|\n';
-
-      checks.forEach((check) => {
-        const {
-          test, value, threshold, unit,
-        } = check;
-        const displayValue = formatValue(value, unit, test);
-        const displayThreshold = formatValue(threshold, unit, test);
-        const passed = checkPassed(value, threshold, test);
-        const status = passed ? '✅' : '❌';
-        const comparison = test === 'Performance Score'
-          ? `≥ ${displayThreshold}${unit}` : `< ${displayThreshold}${unit}`;
-        markdown += `| ${test} | ${status} | **${displayValue}${unit}** | ${comparison} |\n`;
-      });
 
       if (!allPassed) {
-        markdown += '\n#### 🔍 Issues Found\n\n';
-        checks.forEach((check) => {
-          const {
-            test, value, threshold, unit, advice,
-          } = check;
-          if (!checkPassed(value, threshold, test)) {
-            const displayValue = formatValue(value, unit, test);
-            markdown += `**${test}**: ${displayValue}${unit}\n\n`;
-            const adviceText = typeof advice === 'function' ? advice() : advice;
-            markdown += `*Recommendation*: ${adviceText}\n\n`;
-            if (check.diagnostics) {
-              const details = check.diagnostics();
-              if (details.length > 0) {
-                details.forEach((detail) => {
-                  markdown += `${detail}\n`;
-                });
+        markdown += '**❌ FAILURES:**\n\n';
+
+        failures.forEach((fail) => {
+          const target = fail.test === 'Performance Score'
+            ? `${fail.displayThreshold}${fail.unit}`
+            : `${fail.displayThreshold}${fail.unit}`;
+          markdown += `- **${fail.test}**: ${fail.displayValue}${fail.unit} (target: ${target})\n`;
+        });
+
+        // Add cross-domain script info if significant
+        if (crossDomainIssues.length > 0 && crossDomainIssues[0].size > 50000) {
+          const totalSize = Math.round(
+            crossDomainIssues.reduce((sum, v) => sum + v.size, 0) / 1024,
+          );
+          markdown += `\n**Cross-Domain Scripts** (${totalSize}KB):\n\n`;
+
+          crossDomainIssues.slice(0, 3).forEach((vendor) => {
+            const sizeKB = Math.round(vendor.size / 1024);
+            const blocking = vendor.blockingTime > 0 ? `, ${vendor.blockingTime}ms blocking` : '';
+            markdown += `- \`${vendor.domain}\` (${sizeKB}KB${blocking})\n`;
+
+            if (vendor.source) {
+              const phase = vendor.source.phase !== 'unknown' ? ` (${vendor.source.phase})` : '';
+              markdown += `  - 📍 \`${vendor.source.file}:${vendor.source.line}\`${phase}\n`;
+
+              if (vendor.source.phase === 'loadEager') {
+                markdown += '  - 💡 Move to `loadDelayed`\n';
+              } else if (vendor.source.phase === 'loadLazy') {
+                markdown += '  - 💡 Move to `loadDelayed`\n';
               }
             }
-            markdown += '\n';
-          }
-        });
+          });
+        }
+
+        markdown += '\n';
       }
 
-      markdown += `\n[🔗 View Page](${testedUrl})\n`;
+      if (passing.length > 0) {
+        const passingList = passing.map((p) => `${p.test} (${p.displayValue}${p.unit})`).join(', ');
+        markdown += `**✅ PASSING:** ${passingList}\n\n`;
+      }
+
+      markdown += `[🔗 View Page](${testedUrl})\n`;
       markdown += '</details>\n';
 
       markdownResults.push(markdown);
