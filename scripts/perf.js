@@ -91,365 +91,74 @@ lhci.on('close', (exitCode) => {
         }
       };
 
-      const shouldExcludeResource = (item) => {
-        const fileName = item.url.split('/').pop() || '';
-        if (['aem.js', 'scripts.js'].includes(fileName)) return true;
-        if (item.url.includes('media_') && item.url.includes('optimize=')) return true;
-        return false;
+      const sourceCache = {};
+      const findScriptSource = (url) => {
+        if (sourceCache[url]) return sourceCache[url];
+
+        try {
+          const domain = new URL(url).hostname;
+          const searchPaths = ['scripts', 'blocks', 'head.html', 'styles'];
+          const extensions = ['.js', '.html', '.css'];
+
+          const result = searchPaths.reduce((found, searchPath) => {
+            if (found) return found;
+            try {
+              const fullPath = join(process.cwd(), searchPath);
+              const filePaths = searchPath.endsWith('.html')
+                ? [searchPath]
+                : readdirSync(fullPath, { recursive: true })
+                  .filter((f) => extensions.some((ext) => f.endsWith(ext)))
+                  .map((f) => join(searchPath, f));
+
+              const foundInFiles = filePaths.reduce((foundMatch, filePath) => {
+                if (foundMatch) return foundMatch;
+                try {
+                  const content = readFileSync(join(process.cwd(), filePath), 'utf-8');
+                  if (content.includes(domain) || content.includes(url)) {
+                    const lines = content.split('\n');
+                    const lineNum = lines.findIndex((l) => l.includes(domain) || l.includes(url));
+                    let phase = 'unknown';
+                    const lineContent = lines[lineNum] || '';
+                    if (filePath.includes('delayed.js') || lineContent.includes('loadDelayed')) {
+                      phase = 'loadDelayed';
+                    } else if (lineContent.includes('loadLazy')) {
+                      phase = 'loadLazy';
+                    } else if (lineContent.includes('loadEager') || filePath.includes('scripts.js')) {
+                      phase = 'loadEager';
+                    }
+                    return { file: filePath, line: lineNum + 1, phase };
+                  }
+                } catch { /* skip file read errors */ }
+                return null;
+              }, null);
+              if (foundInFiles) return foundInFiles;
+            } catch { /* skip invalid paths */ }
+            return null;
+          }, null);
+
+          sourceCache[url] = result;
+          return result;
+        } catch { /* skip */ }
+
+        sourceCache[url] = null;
+        return null;
       };
 
-      const getThreshold = (resourceType, isThirdPartyResource) => {
-        if (isThirdPartyResource) {
-          return { Script: 3072, Stylesheet: 3072, Other: 5120 }[resourceType] || 5120;
-        }
-        return {
-          Script: 5120, Stylesheet: 3072, Font: 0, Image: 20480, Document: 10240, Other: 10240,
-        }[resourceType] || 10240;
-      };
-
-      const getFileName = (url) => {
-        const parts = url.split('/');
-        return parts.pop() || parts[parts.length - 1] || 'unknown';
-      };
-
-      const formatResourceBreakdown = (resources, pageUrl, label = 'Resources') => {
-        const lines = [];
-        if (resources.length === 0) return lines;
-
-        const firstParty = resources.filter((r) => !isThirdParty(r.url, pageUrl));
-        const thirdParty = resources.filter((r) => isThirdParty(r.url, pageUrl));
-
-        const formatGroup = (items, isTP) => {
-          const groupLines = [];
-          const byType = {
-            Script: items.filter((r) => r.resourceType === 'Script'),
-            Stylesheet: items.filter((r) => r.resourceType === 'Stylesheet'),
-            Image: items.filter((r) => r.resourceType === 'Image'),
-            Font: items.filter((r) => r.resourceType === 'Font'),
-            Document: items.filter((r) => r.resourceType === 'Document'),
-            Other: items.filter((r) => !['Script', 'Stylesheet', 'Image', 'Font', 'Document'].includes(r.resourceType)),
-          };
-
-          Object.entries(byType).forEach(([type, typeItems]) => {
-            if (typeItems.length === 0) return;
-
-            const totalSize = typeItems.reduce((sum, item) => sum + (item.transferSize || 0), 0);
-            const totalKB = Math.round(totalSize / 1024);
-            groupLines.push(`      ${type}: ${totalKB}KB (${typeItems.length} file${typeItems.length > 1 ? 's' : ''})`);
-
-            const threshold = getThreshold(type, isTP);
-            const significant = typeItems
-              .filter((item) => (item.transferSize || 0) > threshold)
-              .sort((a, b) => (b.transferSize || 0) - (a.transferSize || 0));
-
-            significant.forEach((item) => {
-              const fileName = getFileName(item.url);
-              const size = Math.round((item.transferSize || 0) / 1024);
-              if (isTP) {
-                const domain = new URL(item.url).hostname;
-                groupLines.push(`        • ${fileName} from ${domain} (${size}KB)`);
-              } else {
-                groupLines.push(`        • ${fileName} (${size}KB)`);
-              }
-            });
-
-            if (significant.length < typeItems.length) {
-              const smallCount = typeItems.length - significant.length;
-              const thresholdKB = Math.round(threshold / 1024);
-              groupLines.push(`        ... and ${smallCount} smaller file${smallCount > 1 ? 's' : ''} (<${thresholdKB}KB each)`);
+      const groupByVendor = (resources) => {
+        const vendors = {};
+        resources.forEach((item) => {
+          try {
+            const domain = new URL(item.url).hostname;
+            if (!vendors[domain]) {
+              vendors[domain] = {
+                domain, scripts: [], totalSize: 0,
+              };
             }
-          });
-
-          const totalSize = items.reduce((sum, item) => sum + (item.transferSize || 0), 0);
-          const totalKB = Math.round(totalSize / 1024);
-          const warning = totalKB > (isTP ? 50 : 100) ? ' ⚠️' : ' ✓';
-          groupLines.push(`      TOTAL: ${totalKB}KB${warning}`);
-
-          return groupLines;
-        };
-
-        lines.push(`  • ${label}:`);
-
-        if (firstParty.length > 0) {
-          lines.push('    📦 First-Party:');
-          lines.push(...formatGroup(firstParty, false));
-        }
-
-        if (thirdParty.length > 0) {
-          lines.push('    🌐 Third-Party:');
-          lines.push(...formatGroup(thirdParty, true));
-        }
-
-        return lines;
-      };
-
-      const analyzeRootCause = (resources, pageUrl, metricType, metricValue, context = {}) => {
-        const lines = ['  • 🔍 Root cause analysis:'];
-        const firstParty = resources.filter((r) => !isThirdParty(r.url, pageUrl));
-        const thirdParty = resources.filter((r) => isThirdParty(r.url, pageUrl));
-        const firstPartySize = firstParty.reduce((sum, r) => sum + (r.transferSize || 0), 0);
-        const thirdPartySize = thirdParty.reduce((sum, r) => sum + (r.transferSize || 0), 0);
-        const totalSize = firstPartySize + thirdPartySize;
-        const thirdPartyPercent = totalSize > 0
-          ? Math.round((thirdPartySize / totalSize) * 100) : 0;
-
-        Object.entries(context).forEach(([key, value]) => {
-          lines.push(`    - ${key}: ${value}`);
+            vendors[domain].scripts.push(item);
+            vendors[domain].totalSize += (item.transferSize || 0);
+          } catch { /* skip */ }
         });
-
-        if (metricType === 'render-blocking' && thirdPartySize > 100000) {
-          const sizeKB = Math.round(thirdPartySize / 1024);
-          lines.push(`    → Primary issue: Third-party scripts blocking render (${sizeKB}KB)`);
-        } else if (metricType === 'tbt' && thirdPartyPercent > 60) {
-          lines.push(`    → Primary issue: Third-party scripts blocking main thread (${thirdPartyPercent}%)`);
-        } else if (metricType === 'pageweight' && thirdPartyPercent > 50) {
-          lines.push(`    → Primary issue: ${thirdPartyPercent}% of page weight from third-party`);
-        } else if (metricType === 'lcp') {
-          const { ttfb, fcp, lcpTime } = context;
-          if (ttfb > 600) {
-            lines.push('    → Primary issue: Slow server response');
-          } else if (thirdParty.length > 3 && thirdPartySize > 50000) {
-            lines.push('    → Primary issue: Third-party scripts delaying LCP');
-          } else if (lcpTime - fcp > 1000) {
-            lines.push('    → Primary issue: LCP element renders late after initial paint');
-          } else if (fcp > 1800) {
-            lines.push('    → Primary issue: First paint delayed by render-blocking CSS/fonts');
-          } else if (totalSize > 100000) {
-            lines.push('    → Primary issue: Too many/large resources loaded before LCP');
-          } else {
-            lines.push('    → LCP timing is close to threshold (may vary on runs)');
-          }
-        } else if (context.customRootCause) {
-          lines.push(`    → ${context.customRootCause}`);
-        }
-
-        return lines;
-      };
-
-      const getDiagnostics = (rep, type) => {
-        const diagnostics = [];
-
-        if (type === 'lcp') {
-          const lcpTime = rep.audits['largest-contentful-paint'].numericValue;
-          const networkRequests = rep.audits['network-requests'];
-          const ttfb = rep.audits['server-response-time']?.numericValue || 0;
-          const fcp = rep.audits['first-contentful-paint']?.numericValue || 0;
-          const lcpElement = rep.audits['largest-contentful-paint-element'];
-          const lcpNode = lcpElement?.details?.items?.[0];
-
-          if (lcpNode?.node) {
-            const nodeLabel = lcpNode.node.nodeLabel || lcpNode.node.nodeName || 'Unknown';
-            diagnostics.push(`  • 🎯 LCP Element: ${nodeLabel}`);
-            const snippet = lcpNode.node.snippet || '';
-            if (snippet && snippet.length < 100) diagnostics.push(`    ${snippet}`);
-          }
-
-          if (networkRequests?.details?.items) {
-            const beforeLCP = networkRequests.details.items
-              .filter((item) => {
-                const endTime = item.networkEndTime || 0;
-                return endTime > 0 && endTime <= lcpTime;
-              })
-              .filter((item) => !item.url.includes('livereload'));
-
-            diagnostics.push(...formatResourceBreakdown(
-              beforeLCP,
-              rep.finalUrl,
-              `Resources loaded BEFORE LCP (${Math.round(lcpTime)}ms)`,
-            ));
-
-            const topHeavy = beforeLCP
-              .filter((item) => !shouldExcludeResource(item))
-              .sort((a, b) => (b.transferSize || 0) - (a.transferSize || 0))
-              .slice(0, 5)
-              .filter((item) => (item.transferSize || 0) > 10240);
-
-            if (topHeavy.length > 0) {
-              diagnostics.push('  • 📊 Heaviest resources before LCP:');
-              topHeavy.forEach((item) => {
-                const size = Math.round((item.transferSize || 0) / 1024);
-                const isTP = isThirdParty(item.url, rep.finalUrl) ? ' [3rd-party]' : '';
-                diagnostics.push(`    - ${getFileName(item.url)} (${item.resourceType}, ${size}KB)${isTP}`);
-              });
-            }
-
-            const fonts = beforeLCP.filter((item) => item.resourceType === 'Font');
-            if (fonts.length > 0) {
-              const totalFontSize = fonts.reduce((sum, f) => sum + (f.transferSize || 0), 0);
-              const totalFontKB = Math.round(totalFontSize / 1024);
-              if (totalFontKB > 50) {
-                diagnostics.push('  • ⚠️  Font Loading Issues:');
-                diagnostics.push(`    - ${fonts.length} font${fonts.length > 1 ? 's' : ''} loaded before LCP (${totalFontKB}KB)`);
-                diagnostics.push('    - Consider using font-display: swap or optional in CSS');
-              }
-            }
-
-            diagnostics.push(...analyzeRootCause(beforeLCP, rep.finalUrl, 'lcp', lcpTime, {
-              'TTFB (server response)': `${Math.round(ttfb)}ms`,
-              'FCP (first paint)': `${Math.round(fcp)}ms`,
-              'LCP delay': `${Math.round(lcpTime - fcp)}ms after first paint`,
-              ttfb,
-              fcp,
-              lcpTime,
-            }));
-          }
-        }
-
-        if (type === 'fcp') {
-          const networkRequests = rep.audits['network-requests'];
-          if (networkRequests?.details?.items) {
-            const cssJs = networkRequests.details.items
-              .filter((item) => item.resourceType === 'Script' || item.resourceType === 'Stylesheet')
-              .filter((item) => !item.url.includes('livereload'));
-
-            diagnostics.push(...formatResourceBreakdown(cssJs, rep.finalUrl, 'CSS/JS files affecting FCP'));
-            diagnostics.push(...analyzeRootCause(cssJs, rep.finalUrl, 'fcp', null, {
-              customRootCause: 'Defer non-critical CSS/JS, inline critical CSS',
-            }));
-          }
-        }
-
-        if (type === 'render-blocking') {
-          const networkRequests = rep.audits['network-requests'];
-          const renderBlockingAudit = rep.audits['render-blocking-resources'];
-
-          if (networkRequests?.details?.items) {
-            const blockingResources = networkRequests.details.items
-              .filter((item) => {
-                const { resourceType } = item;
-                return resourceType === 'Script' || resourceType === 'Stylesheet';
-              })
-              .filter((item) => !item.url.includes('livereload'));
-
-            diagnostics.push(...formatResourceBreakdown(blockingResources, rep.finalUrl, 'Render-blocking resources'));
-
-            if (renderBlockingAudit?.details?.items?.length > 0) {
-              diagnostics.push('  • ⏱️  Delay caused by blocking resources:');
-              renderBlockingAudit.details.items.slice(0, 5).forEach((item) => {
-                const wastedMs = Math.round(item.wastedMs || 0);
-                const isTP = isThirdParty(item.url, rep.finalUrl) ? ' [3rd-party]' : '';
-                diagnostics.push(`    - ${getFileName(item.url)} (delays by ${wastedMs}ms)${isTP}`);
-              });
-            }
-
-            diagnostics.push(...analyzeRootCause(
-              blockingResources,
-              rep.finalUrl,
-              'render-blocking',
-              null,
-              { customRootCause: 'Load critical CSS/JS async or defer non-critical resources' },
-            ));
-          }
-        }
-
-        if (type === 'tbt') {
-          const thirdPartySummary = rep.audits['third-party-summary'];
-          const mainThreadWork = rep.audits['mainthread-work-breakdown'];
-
-          if (thirdPartySummary?.details?.items) {
-            diagnostics.push('  • 🌐 Third-Party Impact on Main Thread:');
-            thirdPartySummary.details.items.slice(0, 5).forEach((item) => {
-              const { entity, blockingTime, transferSize } = item;
-              const blocking = Math.round(blockingTime || 0);
-              const size = Math.round((transferSize || 0) / 1024);
-              diagnostics.push(`    - ${entity} (${blocking}ms blocking, ${size}KB)`);
-            });
-          }
-
-          if (mainThreadWork?.details?.items) {
-            const scriptEval = mainThreadWork.details.items.find(
-              (item) => item.group === 'scriptEvaluation',
-            );
-            const scriptParse = mainThreadWork.details.items.find(
-              (item) => item.group === 'scriptParseCompile',
-            );
-            if (scriptEval || scriptParse) {
-              diagnostics.push('  • 📦 First-Party JavaScript Execution:');
-              if (scriptEval) {
-                diagnostics.push(`    - Script evaluation: ${Math.round(scriptEval.duration)}ms`);
-              }
-              if (scriptParse) {
-                diagnostics.push(`    - Script parse/compile: ${Math.round(scriptParse.duration)}ms`);
-              }
-            }
-          }
-
-          diagnostics.push('  • 💡 Recommendations:');
-          diagnostics.push('    - Load third-party scripts with async/defer');
-          diagnostics.push('    - Move non-critical scripts to loadLazy or loadDelayed');
-          diagnostics.push('    - Code-split large JavaScript bundles');
-        }
-
-        if (type === 'pageweight') {
-          const networkRequests = rep.audits['network-requests'];
-          if (networkRequests?.details?.items) {
-            const allResources = networkRequests.details.items
-              .filter((item) => !item.url.includes('livereload'));
-
-            const weightLabel = 'Page weight breakdown';
-            diagnostics.push(...formatResourceBreakdown(allResources, rep.finalUrl, weightLabel));
-            diagnostics.push(...analyzeRootCause(allResources, rep.finalUrl, 'pageweight', null));
-          }
-        }
-
-        return diagnostics;
-      };
-
-      const generateRecommendations = (rep, metricKey) => {
-        const recommendations = [];
-        const auditMappings = {
-          performance: [
-            'unused-javascript',
-            'unused-css-rules',
-            'modern-image-formats',
-            'uses-optimized-images',
-            'offscreen-images',
-            'uses-text-compression',
-            'uses-responsive-images',
-          ],
-          lcp: [
-            'server-response-time',
-            'render-blocking-resources',
-            'unused-css-rules',
-            'largest-contentful-paint-element',
-            'prioritize-lcp-image',
-          ],
-          fcp: [
-            'render-blocking-resources',
-            'unused-css-rules',
-            'font-display',
-          ],
-          tbt: [
-            'unused-javascript',
-            'legacy-javascript',
-            'mainthread-work-breakdown',
-            'third-party-summary',
-          ],
-          pageweight: [
-            'total-byte-weight',
-            'unused-javascript',
-            'modern-image-formats',
-            'uses-optimized-images',
-            'uses-text-compression',
-          ],
-        };
-
-        (auditMappings[metricKey] || []).forEach((auditKey) => {
-          const audit = rep.audits[auditKey];
-          if (audit?.details?.overallSavingsMs > 100) {
-            const savingsMs = Math.round(audit.details.overallSavingsMs);
-            const savingsKB = audit.details.overallSavingsBytes
-              ? Math.round(audit.details.overallSavingsBytes / 1024) : null;
-            let rec = audit.title;
-            if (savingsMs && savingsKB) rec += ` (save ${savingsMs}ms, ${savingsKB}KB)`;
-            else if (savingsMs) rec += ` (save ${savingsMs}ms)`;
-            recommendations.push(rec);
-          } else if (audit?.score !== null && audit.score < 0.9) {
-            recommendations.push(audit.title);
-          }
-        });
-
-        return recommendations.slice(0, 3).join('; ') || 'Review Lighthouse report for details';
+        return Object.values(vendors).sort((a, b) => b.totalSize - a.totalSize);
       };
 
       const formatValue = (value, unit, test) => {
@@ -464,30 +173,51 @@ lhci.on('close', (exitCode) => {
         test === 'Performance Score' ? value >= threshold : value <= threshold
       );
 
+      const getCrossDomainIssues = (rep) => {
+        const networkRequests = rep.audits['network-requests'];
+        const thirdPartySummary = rep.audits['third-party-summary'];
+        if (!networkRequests?.details?.items) return [];
+
+        const crossDomain = networkRequests.details.items
+          .filter((item) => isThirdParty(item.url, rep.finalUrl))
+          .filter((item) => !item.url.includes('livereload'))
+          .filter((item) => (item.transferSize || 0) > 3072 || (item.resourceType === 'Script'));
+
+        const vendors = groupByVendor(crossDomain);
+        return vendors.map((vendor) => {
+          const source = findScriptSource(vendor.scripts[0].url);
+          const blockingTime = thirdPartySummary?.details?.items?.find(
+            (item) => item.entity?.includes(vendor.domain) || vendor.domain.includes(item.entity),
+          )?.blockingTime || 0;
+
+          return {
+            domain: vendor.domain,
+            size: vendor.totalSize,
+            blockingTime: Math.round(blockingTime),
+            source,
+            fileCount: vendor.scripts.length,
+          };
+        }).sort((a, b) => b.blockingTime - a.blockingTime || b.size - a.size);
+      };
+
       const checks = [
         {
           test: 'Performance Score',
           value: report.categories.performance.score,
           threshold: 0.9,
           unit: '/100',
-          isScore: true,
-          advice: () => generateRecommendations(report, 'performance'),
         },
         {
           test: 'First Contentful Paint',
           value: report.audits['first-contentful-paint'].numericValue,
           threshold: 2500,
           unit: 'ms',
-          advice: () => generateRecommendations(report, 'fcp'),
-          diagnostics: () => getDiagnostics(report, 'fcp'),
         },
         {
           test: 'Largest Contentful Paint',
           value: report.audits['largest-contentful-paint'].numericValue,
           threshold: 2500,
           unit: 'ms',
-          advice: () => 'See root cause analysis below',
-          diagnostics: () => getDiagnostics(report, 'lcp'),
         },
         {
           test: 'Render Blocking Resources',
@@ -501,90 +231,110 @@ lhci.on('close', (exitCode) => {
           })(),
           threshold: 102400,
           unit: 'KB',
-          advice: () => 'See diagnostics for specific files to defer/optimize',
-          diagnostics: () => getDiagnostics(report, 'render-blocking'),
         },
         {
           test: 'Cumulative Layout Shift',
           value: report.audits['cumulative-layout-shift'].numericValue,
           threshold: 0.1,
           unit: '',
-          advice: () => {
-            const clsAudit = report.audits['cumulative-layout-shift'];
-            if (clsAudit?.details?.items?.length > 0) {
-              const elements = clsAudit.details.items
-                .slice(0, 2)
-                .map((item) => item.node?.nodeLabel || 'element')
-                .join(', ');
-              return `Add size attributes for: ${elements}`;
-            }
-            return 'Add size attributes to images, avoid inserting content above existing content';
-          },
         },
         {
           test: 'Total Blocking Time',
           value: report.audits['total-blocking-time'].numericValue,
           threshold: 300,
           unit: 'ms',
-          advice: () => generateRecommendations(report, 'tbt'),
-          diagnostics: () => getDiagnostics(report, 'tbt'),
         },
         {
           test: 'Total Page Weight',
           value: report.audits['total-byte-weight'].numericValue,
           threshold: 614400,
           unit: 'KB',
-          advice: () => generateRecommendations(report, 'pageweight'),
-          diagnostics: () => getDiagnostics(report, 'pageweight'),
         },
       ];
 
-      console.log('┌─────────────────────────────┬──────────┬──────────────────────────────────────────────────────────────────────────┐');
-      console.log('│ Test                        │ Status   │ Current Value → Target                                               │');
-      console.log('├─────────────────────────────┼──────────┼──────────────────────────────────────────────────────────────────────────┤');
-
+      // Collect failures and passing tests
+      const failures = [];
+      const passing = [];
       let allPassed = true;
+
       checks.forEach((check) => {
-        const {
-          test, value, threshold, unit, advice, diagnostics: checkDiagnostics,
-        } = check;
-        const displayValue = formatValue(value, unit, test);
-        const displayThreshold = formatValue(threshold, unit, test);
-        const passed = checkPassed(value, threshold, test);
-        const status = passed ? '✓ PASS' : '✗ FAIL';
-        const comparison = test === 'Performance Score'
-          ? `${displayValue}${unit} ≥ ${displayThreshold}${unit}`
-          : `${displayValue}${unit} → ${displayThreshold}${unit}`;
-
-        if (!passed) allPassed = false;
-
-        const testPadded = test.padEnd(27);
-        const statusPadded = status.padEnd(8);
-        const comparisonPadded = comparison.padEnd(72);
-
-        console.log(`│ ${testPadded} │ ${statusPadded} │ ${comparisonPadded} │`);
+        const passed = checkPassed(check.value, check.threshold, check.test);
+        const displayValue = formatValue(check.value, check.unit, check.test);
+        const displayThreshold = formatValue(check.threshold, check.unit, check.test);
 
         if (!passed) {
-          const adviceText = typeof advice === 'function' ? advice() : advice;
-          console.log(`│                             │          │ ${adviceText.padEnd(72)} │`);
-          if (checkDiagnostics) {
-            const details = checkDiagnostics();
-            if (details.length > 0) {
-              details.forEach((detail) => {
-                console.log(`│                             │          │ ${detail.padEnd(72)} │`);
-              });
-            }
-          }
+          allPassed = false;
+          failures.push({ ...check, displayValue, displayThreshold });
+        } else {
+          passing.push({ ...check, displayValue });
         }
       });
 
-      console.log('└─────────────────────────────┴──────────┴──────────────────────────────────────────────────────────────────────────┘\n');
+      const crossDomainIssues = getCrossDomainIssues(report);
+
+      // Output: Show only failures in detail
+      if (!allPassed) {
+        console.log('\n❌ FAILURES:\n');
+
+        failures.forEach((fail) => {
+          const target = fail.test === 'Performance Score'
+            ? `${fail.displayThreshold}${fail.unit}`
+            : `${fail.displayThreshold}${fail.unit}`;
+          console.log(`${fail.test}: ${fail.displayValue}${fail.unit} (target: ${target})`);
+
+          // Show cross-domain root cause for performance score
+          if (fail.test === 'Performance Score' && crossDomainIssues.length > 0) {
+            const totalSize = Math.round(
+              crossDomainIssues.reduce((sum, v) => sum + v.size, 0) / 1024,
+            );
+            console.log(`  → Root cause: ${totalSize}KB cross-domain scripts\n`);
+          } else {
+            console.log('');
+          }
+        });
+
+        // Show cross-domain issues if significant
+        if (crossDomainIssues.length > 0 && crossDomainIssues[0].size > 50000) {
+          const totalSize = Math.round(
+            crossDomainIssues.reduce((sum, v) => sum + v.size, 0) / 1024,
+          );
+          console.log(`Cross-Domain Scripts (${totalSize}KB):`);
+
+          crossDomainIssues.slice(0, 5).forEach((vendor) => {
+            const sizeKB = Math.round(vendor.size / 1024);
+            const blocking = vendor.blockingTime > 0 ? `, ${vendor.blockingTime}ms blocking` : '';
+            console.log(`  • ${vendor.domain} (${sizeKB}KB${blocking})`);
+
+            if (vendor.source) {
+              const phase = vendor.source.phase !== 'unknown' ? ` (${vendor.source.phase})` : '';
+              console.log(`    📍 ${vendor.source.file}:${vendor.source.line}${phase}`);
+
+              // Suggest action based on phase
+              if (vendor.source.phase === 'loadEager') {
+                console.log('    → Move to loadDelayed');
+              } else if (vendor.source.phase === 'loadDelayed' && vendor.blockingTime > 100) {
+                console.log('    → Already delayed but blocking - consider removing');
+              } else if (vendor.source.phase === 'loadLazy') {
+                console.log('    → Move to loadDelayed');
+              }
+            }
+            console.log('');
+          });
+        }
+
+        globalAllPassed = false;
+      }
+
+      // Show passing metrics in a single line
+      if (passing.length > 0) {
+        const passingTests = passing.map((p) => `${p.test} (${p.displayValue}${p.unit})`).join(', ');
+        console.log(`\n${'='.repeat(90)}`);
+        console.log(`✅ PASSING: ${passingTests}`);
+        console.log(`${'='.repeat(90)}\n`);
+      }
 
       if (allPassed) {
-        console.log('✅ All checks passed for this page!\n');
-      } else {
-        console.log('❌ Some checks failed for this page.\n');
-        globalAllPassed = false;
+        console.log('\n✅ All checks passed for this page!\n');
       }
 
       // Build markdown for this page
