@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 /* eslint-disable no-console */
 
-import { spawn } from 'child_process';
-import { readFileSync, readdirSync, writeFileSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
+import {
+  spawn,
+} from 'child_process';
+import {
+  readFileSync, readdirSync, writeFileSync, mkdirSync,
+} from 'fs';
+import { join } from 'path';
 
 const args = process.argv.slice(2);
 
@@ -69,25 +73,157 @@ lhci.on('close', (exitCode) => {
     let globalAllPassed = true;
     const markdownResults = [];
 
-    files.forEach((file, index) => {
+    files.forEach((file) => {
       const reportPath = join(lhciDir, file);
       const report = JSON.parse(readFileSync(reportPath, 'utf-8'));
       const testedUrl = report.finalUrl || report.requestedUrl;
-
-      if (index > 0) console.log('\n');
       console.log(`\n${'='.repeat(90)}`);
       console.log(`📄 Testing: ${testedUrl}`);
       console.log(`${'='.repeat(90)}\n`);
 
-      // Helper to determine if URL is third-party
-      const isThirdParty = (url, baseUrl) => {
+      const isThirdParty = (url, pageUrl) => {
         try {
           const urlHost = new URL(url).hostname;
-          const baseHost = new URL(baseUrl).hostname;
+          const baseHost = new URL(pageUrl).hostname;
           return urlHost !== baseHost && urlHost !== 'localhost';
         } catch {
           return false;
         }
+      };
+
+      const shouldExcludeResource = (item) => {
+        const fileName = item.url.split('/').pop() || '';
+        if (['aem.js', 'scripts.js'].includes(fileName)) return true;
+        if (item.url.includes('media_') && item.url.includes('optimize=')) return true;
+        return false;
+      };
+
+      const getThreshold = (resourceType, isThirdPartyResource) => {
+        if (isThirdPartyResource) {
+          return { Script: 3072, Stylesheet: 3072, Other: 5120 }[resourceType] || 5120;
+        }
+        return {
+          Script: 5120, Stylesheet: 3072, Font: 0, Image: 20480, Document: 10240, Other: 10240,
+        }[resourceType] || 10240;
+      };
+
+      const getFileName = (url) => {
+        const parts = url.split('/');
+        return parts.pop() || parts[parts.length - 1] || 'unknown';
+      };
+
+      const formatResourceBreakdown = (resources, pageUrl, label = 'Resources') => {
+        const lines = [];
+        if (resources.length === 0) return lines;
+
+        const firstParty = resources.filter((r) => !isThirdParty(r.url, pageUrl));
+        const thirdParty = resources.filter((r) => isThirdParty(r.url, pageUrl));
+
+        const formatGroup = (items, isTP) => {
+          const groupLines = [];
+          const byType = {
+            Script: items.filter((r) => r.resourceType === 'Script'),
+            Stylesheet: items.filter((r) => r.resourceType === 'Stylesheet'),
+            Image: items.filter((r) => r.resourceType === 'Image'),
+            Font: items.filter((r) => r.resourceType === 'Font'),
+            Document: items.filter((r) => r.resourceType === 'Document'),
+            Other: items.filter((r) => !['Script', 'Stylesheet', 'Image', 'Font', 'Document'].includes(r.resourceType)),
+          };
+
+          Object.entries(byType).forEach(([type, typeItems]) => {
+            if (typeItems.length === 0) return;
+
+            const totalSize = typeItems.reduce((sum, item) => sum + (item.transferSize || 0), 0);
+            const totalKB = Math.round(totalSize / 1024);
+            groupLines.push(`      ${type}: ${totalKB}KB (${typeItems.length} file${typeItems.length > 1 ? 's' : ''})`);
+
+            const threshold = getThreshold(type, isTP);
+            const significant = typeItems
+              .filter((item) => (item.transferSize || 0) > threshold)
+              .sort((a, b) => (b.transferSize || 0) - (a.transferSize || 0));
+
+            significant.forEach((item) => {
+              const fileName = getFileName(item.url);
+              const size = Math.round((item.transferSize || 0) / 1024);
+              if (isTP) {
+                const domain = new URL(item.url).hostname;
+                groupLines.push(`        • ${fileName} from ${domain} (${size}KB)`);
+              } else {
+                groupLines.push(`        • ${fileName} (${size}KB)`);
+              }
+            });
+
+            if (significant.length < typeItems.length) {
+              const smallCount = typeItems.length - significant.length;
+              const thresholdKB = Math.round(threshold / 1024);
+              groupLines.push(`        ... and ${smallCount} smaller file${smallCount > 1 ? 's' : ''} (<${thresholdKB}KB each)`);
+            }
+          });
+
+          const totalSize = items.reduce((sum, item) => sum + (item.transferSize || 0), 0);
+          const totalKB = Math.round(totalSize / 1024);
+          const warning = totalKB > (isTP ? 50 : 100) ? ' ⚠️' : ' ✓';
+          groupLines.push(`      TOTAL: ${totalKB}KB${warning}`);
+
+          return groupLines;
+        };
+
+        lines.push(`  • ${label}:`);
+
+        if (firstParty.length > 0) {
+          lines.push('    📦 First-Party:');
+          lines.push(...formatGroup(firstParty, false));
+        }
+
+        if (thirdParty.length > 0) {
+          lines.push('    🌐 Third-Party:');
+          lines.push(...formatGroup(thirdParty, true));
+        }
+
+        return lines;
+      };
+
+      const analyzeRootCause = (resources, pageUrl, metricType, metricValue, context = {}) => {
+        const lines = ['  • 🔍 Root cause analysis:'];
+        const firstParty = resources.filter((r) => !isThirdParty(r.url, pageUrl));
+        const thirdParty = resources.filter((r) => isThirdParty(r.url, pageUrl));
+        const firstPartySize = firstParty.reduce((sum, r) => sum + (r.transferSize || 0), 0);
+        const thirdPartySize = thirdParty.reduce((sum, r) => sum + (r.transferSize || 0), 0);
+        const totalSize = firstPartySize + thirdPartySize;
+        const thirdPartyPercent = totalSize > 0
+          ? Math.round((thirdPartySize / totalSize) * 100) : 0;
+
+        Object.entries(context).forEach(([key, value]) => {
+          lines.push(`    - ${key}: ${value}`);
+        });
+
+        if (metricType === 'render-blocking' && thirdPartySize > 100000) {
+          const sizeKB = Math.round(thirdPartySize / 1024);
+          lines.push(`    → Primary issue: Third-party scripts blocking render (${sizeKB}KB)`);
+        } else if (metricType === 'tbt' && thirdPartyPercent > 60) {
+          lines.push(`    → Primary issue: Third-party scripts blocking main thread (${thirdPartyPercent}%)`);
+        } else if (metricType === 'pageweight' && thirdPartyPercent > 50) {
+          lines.push(`    → Primary issue: ${thirdPartyPercent}% of page weight from third-party`);
+        } else if (metricType === 'lcp') {
+          const { ttfb, fcp, lcpTime } = context;
+          if (ttfb > 600) {
+            lines.push('    → Primary issue: Slow server response');
+          } else if (thirdParty.length > 3 && thirdPartySize > 50000) {
+            lines.push('    → Primary issue: Third-party scripts delaying LCP');
+          } else if (lcpTime - fcp > 1000) {
+            lines.push('    → Primary issue: LCP element renders late after initial paint');
+          } else if (fcp > 1800) {
+            lines.push('    → Primary issue: First paint delayed by render-blocking CSS/fonts');
+          } else if (totalSize > 100000) {
+            lines.push('    → Primary issue: Too many/large resources loaded before LCP');
+          } else {
+            lines.push('    → LCP timing is close to threshold (may vary on runs)');
+          }
+        } else if (context.customRootCause) {
+          lines.push(`    → ${context.customRootCause}`);
+        }
+
+        return lines;
       };
 
       const getDiagnostics = (rep, type) => {
@@ -98,27 +234,17 @@ lhci.on('close', (exitCode) => {
           const networkRequests = rep.audits['network-requests'];
           const ttfb = rep.audits['server-response-time']?.numericValue || 0;
           const fcp = rep.audits['first-contentful-paint']?.numericValue || 0;
-
-          // Show LCP Element prominently at the top
           const lcpElement = rep.audits['largest-contentful-paint-element'];
           const lcpNode = lcpElement?.details?.items?.[0];
-          if (lcpNode && lcpNode.node) {
-            const snippet = lcpNode.node.snippet || '';
+
+          if (lcpNode?.node) {
             const nodeLabel = lcpNode.node.nodeLabel || lcpNode.node.nodeName || 'Unknown';
             diagnostics.push(`  • 🎯 LCP Element: ${nodeLabel}`);
-            if (snippet && snippet.length < 100) {
-              diagnostics.push(`    ${snippet}`);
-            }
-          } else {
-            // Try to get from lcp-lazy-loaded audit or metrics
-            const lcpMetric = rep.audits['largest-contentful-paint'];
-            if (lcpMetric?.displayValue) {
-              diagnostics.push(`  • 🎯 LCP Element: ${lcpMetric.displayValue}`);
-            }
+            const snippet = lcpNode.node.snippet || '';
+            if (snippet && snippet.length < 100) diagnostics.push(`    ${snippet}`);
           }
 
           if (networkRequests?.details?.items) {
-            // Filter resources that finished before LCP using networkEndTime (already in ms)
             const beforeLCP = networkRequests.details.items
               .filter((item) => {
                 const endTime = item.networkEndTime || 0;
@@ -126,118 +252,14 @@ lhci.on('close', (exitCode) => {
               })
               .filter((item) => !item.url.includes('livereload'));
 
-            // Separate first-party and third-party resources
-            const firstParty = beforeLCP.filter((item) => !isThirdParty(item.url, rep.finalUrl));
-            const thirdParty = beforeLCP.filter((item) => isThirdParty(item.url, rep.finalUrl));
+            diagnostics.push(...formatResourceBreakdown(
+              beforeLCP,
+              rep.finalUrl,
+              `Resources loaded BEFORE LCP (${Math.round(lcpTime)}ms)`,
+            ));
 
-            const byType = {
-              Script: firstParty.filter((r) => r.resourceType === 'Script'),
-              Stylesheet: firstParty.filter((r) => r.resourceType === 'Stylesheet'),
-              Image: firstParty.filter((r) => r.resourceType === 'Image'),
-              Font: firstParty.filter((r) => r.resourceType === 'Font'),
-              Document: firstParty.filter((r) => r.resourceType === 'Document'),
-              Other: firstParty.filter((r) => !['Script', 'Stylesheet', 'Image', 'Font', 'Document'].includes(r.resourceType)),
-            };
-
-            const totalSize = firstParty.reduce((sum, item) => sum + (item.transferSize || 0), 0);
-            const totalSizeKB = Math.round(totalSize / 1024);
-
-            diagnostics.push(`  • Resources loaded BEFORE LCP (${Math.round(lcpTime)}ms):`);
-            diagnostics.push(`    📦 First-Party Resources:`);
-            Object.entries(byType).forEach(([resourceType, items]) => {
-              if (items.length > 0) {
-                const typeSize = items.reduce((sum, item) => sum + (item.transferSize || 0), 0);
-                const typeSizeKB = Math.round(typeSize / 1024);
-                diagnostics.push(`      ${resourceType}: ${typeSizeKB}KB (${items.length} file${items.length > 1 ? 's' : ''})`);
-                
-                // Different thresholds per resource type (best practices)
-                const thresholds = {
-                  Script: 5120,        // 5KB - scripts block execution
-                  Stylesheet: 3072,    // 3KB - render-blocking CSS
-                  Font: 0,             // Always show - fonts are critical for rendering
-                  Image: 20480,        // 20KB - focus on larger images
-                  Document: 10240,     // 10KB
-                  Other: 10240,        // 10KB
-                };
-                const threshold = thresholds[resourceType] || 10240;
-                
-                const significantFiles = items
-                  .filter((item) => (item.transferSize || 0) > threshold)
-                  .sort((a, b) => (b.transferSize || 0) - (a.transferSize || 0));
-                
-                significantFiles.forEach((item) => {
-                  const fileName = item.url.split('/').pop() || item.url.substring(item.url.lastIndexOf('/') + 1);
-                  const size = Math.round((item.transferSize || 0) / 1024);
-                  diagnostics.push(`        • ${fileName} (${size}KB)`);
-                });
-                
-                if (significantFiles.length < items.length) {
-                  const smallCount = items.length - significantFiles.length;
-                  const thresholdKB = Math.round(threshold / 1024);
-                  diagnostics.push(`        ... and ${smallCount} smaller file${smallCount > 1 ? 's' : ''} (<${thresholdKB}KB each)`);
-                }
-              }
-            });
-            diagnostics.push(`      TOTAL: ${totalSizeKB}KB ${totalSizeKB > 100 ? '⚠️  (exceeds 100KB recommendation)' : '✓'}`);
-
-            // Show third-party resources separately
-            if (thirdParty.length > 0) {
-              const thirdPartySize = thirdParty.reduce((sum, item) => sum + (item.transferSize || 0), 0);
-              const thirdPartySizeKB = Math.round(thirdPartySize / 1024);
-              const thirdPartyByType = {
-                Script: thirdParty.filter((r) => r.resourceType === 'Script'),
-                Stylesheet: thirdParty.filter((r) => r.resourceType === 'Stylesheet'),
-                Other: thirdParty.filter((r) => !['Script', 'Stylesheet'].includes(r.resourceType)),
-              };
-
-              diagnostics.push(`    🌐 Third-Party Resources:`);
-              Object.entries(thirdPartyByType).forEach(([resourceType, items]) => {
-                if (items.length > 0) {
-                  const typeSize = items.reduce((sum, item) => sum + (item.transferSize || 0), 0);
-                  const typeSizeKB = Math.round(typeSize / 1024);
-                  diagnostics.push(`      ${resourceType}: ${typeSizeKB}KB (${items.length} file${items.length > 1 ? 's' : ''})`);
-                  
-                  // Lower thresholds for third-party (they're usually more impactful)
-                  const thresholds = {
-                    Script: 3072,        // 3KB - third-party scripts are critical
-                    Stylesheet: 3072,    // 3KB - third-party CSS
-                    Other: 5120,         // 5KB
-                  };
-                  const threshold = thresholds[resourceType] || 5120;
-                  
-                  const significantFiles = items
-                    .filter((item) => (item.transferSize || 0) > threshold)
-                    .sort((a, b) => (b.transferSize || 0) - (a.transferSize || 0));
-                  
-                  significantFiles.forEach((item) => {
-                    const url = new URL(item.url);
-                    const fileName = url.pathname.split('/').pop() || url.pathname;
-                    const size = Math.round((item.transferSize || 0) / 1024);
-                    diagnostics.push(`        • ${fileName} from ${url.hostname} (${size}KB)`);
-                  });
-                  
-                  if (significantFiles.length < items.length) {
-                    const smallCount = items.length - significantFiles.length;
-                    const thresholdKB = Math.round(threshold / 1024);
-                    diagnostics.push(`        ... and ${smallCount} smaller file${smallCount > 1 ? 's' : ''} (<${thresholdKB}KB each)`);
-                  }
-                }
-              });
-              diagnostics.push(`      TOTAL: ${thirdPartySizeKB}KB ${thirdPartySizeKB > 50 ? '⚠️  (third-party scripts impacting LCP)' : ''}`);
-            }
-
-            const allBeforeLCP = [...firstParty, ...thirdParty];
-            // Exclude framework/core files and optimized images
-            const coreFiles = ['aem.js', 'scripts.js'];
-            const topHeavy = allBeforeLCP
-              .filter((item) => {
-                const fileName = item.url.split('/').pop() || '';
-                // Exclude core framework files
-                if (coreFiles.includes(fileName)) return false;
-                // Exclude AEM optimized images (media_* with optimize param)
-                if (item.url.includes('media_') && item.url.includes('optimize=')) return false;
-                return true;
-              })
+            const topHeavy = beforeLCP
+              .filter((item) => !shouldExcludeResource(item))
               .sort((a, b) => (b.transferSize || 0) - (a.transferSize || 0))
               .slice(0, 5)
               .filter((item) => (item.transferSize || 0) > 10240);
@@ -245,16 +267,13 @@ lhci.on('close', (exitCode) => {
             if (topHeavy.length > 0) {
               diagnostics.push('  • 📊 Heaviest resources before LCP:');
               topHeavy.forEach((item) => {
-                const { url, transferSize, resourceType } = item;
-                const fileName = url.split('/').pop() || url.substring(url.lastIndexOf('/') + 1, url.lastIndexOf('/') + 30);
-                const size = Math.round((transferSize || 0) / 1024);
-                const isTP = isThirdParty(url, rep.finalUrl) ? ' [3rd-party]' : '';
-                diagnostics.push(`    - ${fileName} (${resourceType}, ${size}KB)${isTP}`);
+                const size = Math.round((item.transferSize || 0) / 1024);
+                const isTP = isThirdParty(item.url, rep.finalUrl) ? ' [3rd-party]' : '';
+                diagnostics.push(`    - ${getFileName(item.url)} (${item.resourceType}, ${size}KB)${isTP}`);
               });
             }
-            
-            // Check for font-display issues
-            const fonts = allBeforeLCP.filter((item) => item.resourceType === 'Font');
+
+            const fonts = beforeLCP.filter((item) => item.resourceType === 'Font');
             if (fonts.length > 0) {
               const totalFontSize = fonts.reduce((sum, f) => sum + (f.transferSize || 0), 0);
               const totalFontKB = Math.round(totalFontSize / 1024);
@@ -262,40 +281,17 @@ lhci.on('close', (exitCode) => {
                 diagnostics.push('  • ⚠️  Font Loading Issues:');
                 diagnostics.push(`    - ${fonts.length} font${fonts.length > 1 ? 's' : ''} loaded before LCP (${totalFontKB}KB)`);
                 diagnostics.push('    - Consider using font-display: swap or optional in CSS');
-                diagnostics.push('    - This allows system fonts to show while custom fonts load');
               }
             }
 
-            // Root cause analysis
-            diagnostics.push('  • 🔍 Root cause analysis:');
-            diagnostics.push(`    - TTFB (server response): ${Math.round(ttfb)}ms`);
-            diagnostics.push(`    - FCP (first paint): ${Math.round(fcp)}ms`);
-            diagnostics.push(`    - LCP delay: ${Math.round(lcpTime - fcp)}ms after first paint`);
-
-            if (ttfb > 600) {
-              diagnostics.push('    → Primary issue: Slow server response');
-            } else if (thirdParty.length > 3 && thirdPartySizeKB > 50) {
-              diagnostics.push('    → Primary issue: Third-party scripts delaying LCP');
-            } else if (lcpTime - fcp > 1000) {
-              diagnostics.push('    → Primary issue: LCP element renders late after initial paint');
-            } else if (fcp > 1800) {
-              diagnostics.push('    → Primary issue: First paint delayed by render-blocking CSS/fonts');
-            } else if (totalSizeKB > 100) {
-              diagnostics.push('    → Primary issue: Too many/large resources loaded before LCP');
-            } else {
-              diagnostics.push('    → LCP timing is close to threshold (may vary on different runs)');
-            }
-          }
-
-          const renderBlocking = rep.audits['render-blocking-resources'];
-          if (renderBlocking?.details?.items?.length > 0) {
-            diagnostics.push('  • ⚠️  Render-blocking resources:');
-            renderBlocking.details.items.slice(0, 5).forEach((item) => {
-              const fileName = item.url.split('/').pop();
-              const wastedMs = Math.round(item.wastedMs || 0);
-              const isTP = isThirdParty(item.url, rep.finalUrl) ? ' [3rd-party]' : '';
-              diagnostics.push(`    - ${fileName} (delays by ${wastedMs}ms)${isTP}`);
-            });
+            diagnostics.push(...analyzeRootCause(beforeLCP, rep.finalUrl, 'lcp', lcpTime, {
+              'TTFB (server response)': `${Math.round(ttfb)}ms`,
+              'FCP (first paint)': `${Math.round(fcp)}ms`,
+              'LCP delay': `${Math.round(lcpTime - fcp)}ms after first paint`,
+              ttfb,
+              fcp,
+              lcpTime,
+            }));
           }
         }
 
@@ -304,56 +300,103 @@ lhci.on('close', (exitCode) => {
           if (networkRequests?.details?.items) {
             const cssJs = networkRequests.details.items
               .filter((item) => item.resourceType === 'Script' || item.resourceType === 'Stylesheet')
-              .filter((item) => !item.url.includes('livereload'))
-              .sort((a, b) => (b.transferSize || 0) - (a.transferSize || 0))
-              .slice(0, 5);
+              .filter((item) => !item.url.includes('livereload'));
 
-            if (cssJs.length > 0) {
-              diagnostics.push('  • Largest CSS/JS files:');
-              cssJs.forEach((item) => {
-                const size = ((item.transferSize || 0) / 1024).toFixed(0);
-                const fileName = item.url.split('/').pop() || item.url.substring(item.url.lastIndexOf('/') + 1, item.url.lastIndexOf('/') + 30);
-                const fileType = item.resourceType === 'Script' ? 'JS' : 'CSS';
-                const isTP = isThirdParty(item.url, rep.finalUrl) ? ' [3rd-party]' : '';
-                diagnostics.push(`    - ${fileType}: ${fileName} (${size}KB)${isTP}`);
-              });
-            }
+            diagnostics.push(...formatResourceBreakdown(cssJs, rep.finalUrl, 'CSS/JS files affecting FCP'));
+            diagnostics.push(...analyzeRootCause(cssJs, rep.finalUrl, 'fcp', null, {
+              customRootCause: 'Defer non-critical CSS/JS, inline critical CSS',
+            }));
           }
         }
 
         if (type === 'render-blocking') {
           const networkRequests = rep.audits['network-requests'];
+          const renderBlockingAudit = rep.audits['render-blocking-resources'];
+
           if (networkRequests?.details?.items) {
-            const css = networkRequests.details.items
-              .filter((item) => item.resourceType === 'Stylesheet')
-              .map((item) => {
-                const size = ((item.transferSize || 0) / 1024).toFixed(0);
-                const fileName = item.url.split('/').pop();
+            const blockingResources = networkRequests.details.items
+              .filter((item) => {
+                const { resourceType } = item;
+                return resourceType === 'Script' || resourceType === 'Stylesheet';
+              })
+              .filter((item) => !item.url.includes('livereload'));
+
+            diagnostics.push(...formatResourceBreakdown(blockingResources, rep.finalUrl, 'Render-blocking resources'));
+
+            if (renderBlockingAudit?.details?.items?.length > 0) {
+              diagnostics.push('  • ⏱️  Delay caused by blocking resources:');
+              renderBlockingAudit.details.items.slice(0, 5).forEach((item) => {
+                const wastedMs = Math.round(item.wastedMs || 0);
                 const isTP = isThirdParty(item.url, rep.finalUrl) ? ' [3rd-party]' : '';
-                return `${fileName} (${size}KB)${isTP}`;
+                diagnostics.push(`    - ${getFileName(item.url)} (delays by ${wastedMs}ms)${isTP}`);
               });
-            const js = networkRequests.details.items
-              .filter((item) => item.resourceType === 'Script' && !item.url.includes('livereload'))
-              .map((item) => {
-                const size = ((item.transferSize || 0) / 1024).toFixed(0);
-                const fileName = item.url.split('/').pop();
-                const isTP = isThirdParty(item.url, rep.finalUrl) ? ' [3rd-party]' : '';
-                return `${fileName} (${size}KB)${isTP}`;
-              });
-            if (css.length) diagnostics.push(`  • CSS files: ${css.slice(0, 3).join(', ')}`);
-            if (js.length) diagnostics.push(`  • JS files: ${js.slice(0, 3).join(', ')}`);
+            }
+
+            diagnostics.push(...analyzeRootCause(
+              blockingResources,
+              rep.finalUrl,
+              'render-blocking',
+              null,
+              { customRootCause: 'Load critical CSS/JS async or defer non-critical resources' },
+            ));
+          }
+        }
+
+        if (type === 'tbt') {
+          const thirdPartySummary = rep.audits['third-party-summary'];
+          const mainThreadWork = rep.audits['mainthread-work-breakdown'];
+
+          if (thirdPartySummary?.details?.items) {
+            diagnostics.push('  • 🌐 Third-Party Impact on Main Thread:');
+            thirdPartySummary.details.items.slice(0, 5).forEach((item) => {
+              const { entity, blockingTime, transferSize } = item;
+              const blocking = Math.round(blockingTime || 0);
+              const size = Math.round((transferSize || 0) / 1024);
+              diagnostics.push(`    - ${entity} (${blocking}ms blocking, ${size}KB)`);
+            });
+          }
+
+          if (mainThreadWork?.details?.items) {
+            const scriptEval = mainThreadWork.details.items.find(
+              (item) => item.group === 'scriptEvaluation',
+            );
+            const scriptParse = mainThreadWork.details.items.find(
+              (item) => item.group === 'scriptParseCompile',
+            );
+            if (scriptEval || scriptParse) {
+              diagnostics.push('  • 📦 First-Party JavaScript Execution:');
+              if (scriptEval) {
+                diagnostics.push(`    - Script evaluation: ${Math.round(scriptEval.duration)}ms`);
+              }
+              if (scriptParse) {
+                diagnostics.push(`    - Script parse/compile: ${Math.round(scriptParse.duration)}ms`);
+              }
+            }
+          }
+
+          diagnostics.push('  • 💡 Recommendations:');
+          diagnostics.push('    - Load third-party scripts with async/defer');
+          diagnostics.push('    - Move non-critical scripts to loadLazy or loadDelayed');
+          diagnostics.push('    - Code-split large JavaScript bundles');
+        }
+
+        if (type === 'pageweight') {
+          const networkRequests = rep.audits['network-requests'];
+          if (networkRequests?.details?.items) {
+            const allResources = networkRequests.details.items
+              .filter((item) => !item.url.includes('livereload'));
+
+            const weightLabel = 'Page weight breakdown';
+            diagnostics.push(...formatResourceBreakdown(allResources, rep.finalUrl, weightLabel));
+            diagnostics.push(...analyzeRootCause(allResources, rep.finalUrl, 'pageweight', null));
           }
         }
 
         return diagnostics;
       };
 
-      // Generate dynamic recommendations based on Lighthouse opportunities
       const generateRecommendations = (rep, metricKey) => {
         const recommendations = [];
-        const opportunities = rep.audits;
-
-        // Map of audit keys to check for each metric
         const auditMappings = {
           performance: [
             'unused-javascript',
@@ -391,42 +434,35 @@ lhci.on('close', (exitCode) => {
           ],
         };
 
-        const relevantAudits = auditMappings[metricKey] || [];
-        
-        relevantAudits.forEach((auditKey) => {
-          const audit = opportunities[auditKey];
-          if (audit && audit.details?.overallSavingsMs > 100) {
+        (auditMappings[metricKey] || []).forEach((auditKey) => {
+          const audit = rep.audits[auditKey];
+          if (audit?.details?.overallSavingsMs > 100) {
             const savingsMs = Math.round(audit.details.overallSavingsMs);
-            const savingsKB = audit.details.overallSavingsBytes 
-              ? Math.round(audit.details.overallSavingsBytes / 1024) 
-              : null;
-            
+            const savingsKB = audit.details.overallSavingsBytes
+              ? Math.round(audit.details.overallSavingsBytes / 1024) : null;
             let rec = audit.title;
-            if (savingsMs && savingsKB) {
-              rec += ` (save ${savingsMs}ms, ${savingsKB}KB)`;
-            } else if (savingsMs) {
-              rec += ` (save ${savingsMs}ms)`;
-            }
+            if (savingsMs && savingsKB) rec += ` (save ${savingsMs}ms, ${savingsKB}KB)`;
+            else if (savingsMs) rec += ` (save ${savingsMs}ms)`;
             recommendations.push(rec);
-          } else if (audit && audit.score !== null && audit.score < 0.9) {
+          } else if (audit?.score !== null && audit.score < 0.9) {
             recommendations.push(audit.title);
           }
         });
 
-        // If no specific recommendations, provide generic guidance
-        if (recommendations.length === 0) {
-          const genericAdvice = {
-            performance: 'Optimize images, reduce JavaScript, improve server response times',
-            lcp: 'Optimize server response time, reduce render-blocking resources',
-            fcp: 'Inline critical CSS, defer non-critical scripts',
-            tbt: 'Reduce JavaScript execution time, code-split large bundles',
-            pageweight: 'Compress images, minify CSS/JS, remove unused code',
-          };
-          return genericAdvice[metricKey] || 'Review Lighthouse report for optimization opportunities';
-        }
-
-        return recommendations.slice(0, 3).join('; ');
+        return recommendations.slice(0, 3).join('; ') || 'Review Lighthouse report for details';
       };
+
+      const formatValue = (value, unit, test) => {
+        const isCLS = test === 'Cumulative Layout Shift';
+        if (test === 'Performance Score') return (value * 100).toFixed(0);
+        if (isCLS) return value.toFixed(3);
+        if (unit === 'KB') return (value / 1024).toFixed(0);
+        return Math.round(value);
+      };
+
+      const checkPassed = (value, threshold, test) => (
+        test === 'Performance Score' ? value >= threshold : value <= threshold
+      );
 
       const checks = [
         {
@@ -491,6 +527,7 @@ lhci.on('close', (exitCode) => {
           threshold: 300,
           unit: 'ms',
           advice: () => generateRecommendations(report, 'tbt'),
+          diagnostics: () => getDiagnostics(report, 'tbt'),
         },
         {
           test: 'Total Page Weight',
@@ -498,6 +535,7 @@ lhci.on('close', (exitCode) => {
           threshold: 614400,
           unit: 'KB',
           advice: () => generateRecommendations(report, 'pageweight'),
+          diagnostics: () => getDiagnostics(report, 'pageweight'),
         },
       ];
 
@@ -507,55 +545,30 @@ lhci.on('close', (exitCode) => {
 
       let allPassed = true;
       checks.forEach((check) => {
-        const isScore = check.isScore || false;
-        const isCLS = check.test === 'Cumulative Layout Shift';
-
-        let displayValue = check.value;
-        if (isScore) {
-          displayValue = (check.value * 100).toFixed(0);
-        } else if (isCLS) {
-          displayValue = check.value.toFixed(3);
-        } else if (check.unit === 'KB') {
-          displayValue = (check.value / 1024).toFixed(0);
-        } else {
-          displayValue = Math.round(check.value);
-        }
-
-        let displayThreshold = check.threshold;
-        if (isScore) {
-          displayThreshold = (check.threshold * 100).toFixed(0);
-        } else if (isCLS) {
-          displayThreshold = check.threshold.toFixed(3);
-        } else if (check.unit === 'KB') {
-          displayThreshold = (check.threshold / 1024).toFixed(0);
-        }
-
-        let passed;
-        if (isScore) {
-          passed = check.value >= check.threshold;
-        } else {
-          passed = check.value <= check.threshold;
-        }
-
+        const {
+          test, value, threshold, unit, advice, diagnostics: checkDiagnostics,
+        } = check;
+        const displayValue = formatValue(value, unit, test);
+        const displayThreshold = formatValue(threshold, unit, test);
+        const passed = checkPassed(value, threshold, test);
         const status = passed ? '✓ PASS' : '✗ FAIL';
-        const unit = check.unit;
-        const comparison = isScore
+        const comparison = test === 'Performance Score'
           ? `${displayValue}${unit} ≥ ${displayThreshold}${unit}`
           : `${displayValue}${unit} → ${displayThreshold}${unit}`;
 
         if (!passed) allPassed = false;
 
-        const testPadded = check.test.padEnd(27);
+        const testPadded = test.padEnd(27);
         const statusPadded = status.padEnd(8);
         const comparisonPadded = comparison.padEnd(72);
 
         console.log(`│ ${testPadded} │ ${statusPadded} │ ${comparisonPadded} │`);
 
         if (!passed) {
-          const advice = typeof check.advice === 'function' ? check.advice() : check.advice;
-          console.log(`│                             │          │ ${advice.padEnd(72)} │`);
-          if (check.diagnostics) {
-            const details = check.diagnostics();
+          const adviceText = typeof advice === 'function' ? advice() : advice;
+          console.log(`│                             │          │ ${adviceText.padEnd(72)} │`);
+          if (checkDiagnostics) {
+            const details = checkDiagnostics();
             if (details.length > 0) {
               details.forEach((detail) => {
                 console.log(`│                             │          │ ${detail.padEnd(72)} │`);
@@ -586,75 +599,29 @@ lhci.on('close', (exitCode) => {
       markdown += '|------|--------|---------------|--------|\n';
 
       checks.forEach((check) => {
-        const isScore = check.isScore || false;
-        const isCLS = check.test === 'Cumulative Layout Shift';
-
-        let displayValue = check.value;
-        if (isScore) {
-          displayValue = (check.value * 100).toFixed(0);
-        } else if (isCLS) {
-          displayValue = check.value.toFixed(3);
-        } else if (check.unit === 'KB') {
-          displayValue = (check.value / 1024).toFixed(0);
-        } else {
-          displayValue = Math.round(check.value);
-        }
-
-        let displayThreshold = check.threshold;
-        if (isScore) {
-          displayThreshold = (check.threshold * 100).toFixed(0);
-        } else if (isCLS) {
-          displayThreshold = check.threshold.toFixed(3);
-        } else if (check.unit === 'KB') {
-          displayThreshold = (check.threshold / 1024).toFixed(0);
-        }
-
-        let passed;
-        if (isScore) {
-          passed = check.value >= check.threshold;
-        } else {
-          passed = check.value <= check.threshold;
-        }
-
+        const {
+          test, value, threshold, unit,
+        } = check;
+        const displayValue = formatValue(value, unit, test);
+        const displayThreshold = formatValue(threshold, unit, test);
+        const passed = checkPassed(value, threshold, test);
         const status = passed ? '✅' : '❌';
-        const unit = check.unit;
-        const comparison = isScore
-          ? `≥ ${displayThreshold}${unit}`
-          : `< ${displayThreshold}${unit}`;
-
-        markdown += `| ${check.test} | ${status} | **${displayValue}${unit}** | ${comparison} |\n`;
+        const comparison = test === 'Performance Score'
+          ? `≥ ${displayThreshold}${unit}` : `< ${displayThreshold}${unit}`;
+        markdown += `| ${test} | ${status} | **${displayValue}${unit}** | ${comparison} |\n`;
       });
 
-      // Add issues section if there are failures
       if (!allPassed) {
         markdown += '\n#### 🔍 Issues Found\n\n';
         checks.forEach((check) => {
-          const isScore = check.isScore || false;
-          const isCLS = check.test === 'Cumulative Layout Shift';
-          let passed;
-          if (isScore) {
-            passed = check.value >= check.threshold;
-          } else {
-            passed = check.value <= check.threshold;
-          }
-
-          if (!passed) {
-            let displayValue = check.value;
-            if (isScore) {
-              displayValue = (check.value * 100).toFixed(0);
-            } else if (isCLS) {
-              displayValue = check.value.toFixed(3);
-            } else if (check.unit === 'KB') {
-              displayValue = (check.value / 1024).toFixed(0);
-            } else {
-              displayValue = Math.round(check.value);
-            }
-            const unit = check.unit;
-
-            markdown += `**${check.test}** (${displayValue}${unit})\n`;
-            const advice = typeof check.advice === 'function' ? check.advice() : check.advice;
-            markdown += `- ${advice}\n`;
-
+          const {
+            test, value, threshold, unit, advice,
+          } = check;
+          if (!checkPassed(value, threshold, test)) {
+            const displayValue = formatValue(value, unit, test);
+            markdown += `**${test}**: ${displayValue}${unit}\n\n`;
+            const adviceText = typeof advice === 'function' ? advice() : advice;
+            markdown += `*Recommendation*: ${adviceText}\n\n`;
             if (check.diagnostics) {
               const details = check.diagnostics();
               if (details.length > 0) {
@@ -681,26 +648,26 @@ lhci.on('close', (exitCode) => {
       console.log('❌ Performance checks failed on one or more pages. Please optimize before committing.\n');
     }
 
-    // Write markdown summary
-    const passedCount = files.filter((file, index) => {
+    const passedCount = files.filter((file) => {
       const reportPath = join(lhciDir, file);
       const report = JSON.parse(readFileSync(reportPath, 'utf-8'));
-      const perfScore = report.categories.performance.score;
-      return perfScore >= 0.9;
+      const { performance } = report.categories;
+      return performance.score >= 0.9;
     }).length;
     const totalCount = files.length;
 
-    let fullMarkdown = `## 🚀 Performance Test Results\n\n`;
+    let fullMarkdown = '## 🚀 Performance Test Results\n\n';
     fullMarkdown += `**Status:** ${globalAllPassed ? '✅ All Passed' : '⚠️ Some Failed'} • `;
     fullMarkdown += `**Pages:** ${passedCount}/${totalCount} passed\n\n`;
-    fullMarkdown += `---\n\n`;
-    fullMarkdown += `### 📄 Results by Page\n`;
+    fullMarkdown += '---\n\n';
+    fullMarkdown += '### 📄 Results by Page\n';
     fullMarkdown += markdownResults.join('\n');
-    fullMarkdown += `\n---\n\n`;
-    fullMarkdown += `<sub>🤖 Automated by Lighthouse CI • `;
-    fullMarkdown += `[View Full Reports](https://github.com/$\{GITHUB_REPOSITORY}/actions/runs/$\{GITHUB_RUN_ID})</sub>\n`;
+    fullMarkdown += '\n---\n\n';
+    fullMarkdown += '<sub>🤖 Automated by Lighthouse CI • ';
+    const githubRepo = process.env.GITHUB_REPOSITORY || 'repository';
+    const githubRunId = process.env.GITHUB_RUN_ID || 'run-id';
+    fullMarkdown += `<a href="https://github.com/${githubRepo}/actions/runs/${githubRunId}">View Full Reports</a></sub>\n`;
 
-    // Ensure .lighthouseci directory exists
     mkdirSync(lhciDir, { recursive: true });
     const summaryPath = join(lhciDir, 'summary.md');
     writeFileSync(summaryPath, fullMarkdown, 'utf-8');
