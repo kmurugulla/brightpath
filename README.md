@@ -1,9 +1,9 @@
-# Your Project's Title...
-Your project's description...
+# Brightpath
+EDS Experiementation 
 
 ## Environments
-- Preview: https://{branch}--{repo}--{owner}.aem.page/
-- Live: https://{branch}--{repo}--{owner}.aem.live/
+- Preview: https://main--brightpath--kmurugulla.aem.page/
+- Live: https://main--brightpath--kmurugulla.aem.live/
 
 ## Documentation
 
@@ -26,6 +26,8 @@ npm run lint
 ```
 
 ## Performance Budget
+
+For detailed setup instructions and documentation, see [PERFORMANCE_BUDGET_SETUP.md](./PERFORMANCE_BUDGET_SETUP.md).
 
 ### Automated Testing (GitHub Actions)
 
