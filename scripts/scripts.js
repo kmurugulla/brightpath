@@ -15,6 +15,7 @@ import {
   readBlockConfig,
   toClassName,
   toCamelCase,
+  loadScript,
 } from './aem.js';
 
 /**
@@ -273,6 +274,7 @@ async function loadSidekick() {
 
 async function loadPage() {
   await loadEager(document);
+  await loadScript('https://assets.adobedtm.com/f4211b096882/26f71ad376c4/launch-b69ac51c7dcd-development.min.js', { id: 'adobe-launch' });
   await loadLazy(document);
   loadDelayed();
   loadSidekick();
