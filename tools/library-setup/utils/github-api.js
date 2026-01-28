@@ -88,10 +88,8 @@ export default class GitHubAPI {
 
       const data = await response.json();
 
-      // Filter for files in /blocks/ directory
       const blockFiles = data.tree.filter((item) => item.path.startsWith('blocks/') && item.type === 'tree');
 
-      // Extract block names
       const blocks = blockFiles.map((item) => {
         const pathParts = item.path.split('/');
         const blockName = pathParts[1]; // blocks/{blockName}/...
@@ -101,7 +99,6 @@ export default class GitHubAPI {
         };
       });
 
-      // Remove duplicates
       const uniqueBlocks = Array.from(
         new Map(blocks.map((block) => [block.name, block])).values(),
       );
@@ -128,7 +125,6 @@ export default class GitHubAPI {
 
       const data = await response.json();
 
-      // Decode base64 content
       if (data.content) {
         return atob(data.content);
       }

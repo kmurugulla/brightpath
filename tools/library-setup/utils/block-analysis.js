@@ -204,7 +204,7 @@ export async function analyzeBlock(api, blockName) {
       result.structure.columns = rowColStructure.columns;
     }
   } catch (error) {
-    // do nothing
+    // ignore
   }
 
   try {
@@ -216,7 +216,7 @@ export async function analyzeBlock(api, blockName) {
       Object.assign(result.structure, detectStructureFeatures(result.structure.classes));
     }
   } catch (error) {
-    // do nothing
+    // ignore
   }
 
   return result;

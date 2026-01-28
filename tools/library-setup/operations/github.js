@@ -12,7 +12,7 @@ export function parseGitHubURL(url) {
       };
     }
   } catch (error) {
-    // do nothing
+    // ignore
   }
   return null;
 }
@@ -41,7 +41,7 @@ async function detectAutoBlocks(api) {
       autoBlocks.add(match[1]);
     });
   } catch (error) {
-    // do nothing
+    // ignore
   }
 
   return autoBlocks;
@@ -51,27 +51,18 @@ export async function discoverBlocks(org, repo, token = null) {
   const api = new GitHubAPI(org, repo, 'main', token);
   const allBlocks = await api.discoverBlocks();
 
-  const excludedBlocks = new Set(['header', 'footer']);
+  const excludedBlocks = new Set(['header', 'footer', 'fragment']);
 
   try {
     const autoBlocks = await detectAutoBlocks(api);
     if (autoBlocks.size > 0) {
-      // eslint-disable-next-line no-console
-      console.log('Auto-blocks detected from scripts.js:', Array.from(autoBlocks));
       autoBlocks.forEach((blockName) => excludedBlocks.add(blockName));
     }
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.warn('Could not detect auto-blocks from scripts.js:', error.message);
+    // ignore
   }
 
   const filteredBlocks = allBlocks.filter((block) => !excludedBlocks.has(block.name));
-  const excluded = allBlocks.filter((block) => excludedBlocks.has(block.name));
-
-  if (excluded.length > 0) {
-    // eslint-disable-next-line no-console
-    console.log(`Excluded ${excluded.length} block(s) from library:`, excluded.map((b) => b.name));
-  }
 
   return filteredBlocks.map((block) => ({
     ...block,

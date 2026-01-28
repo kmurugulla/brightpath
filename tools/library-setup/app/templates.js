@@ -149,7 +149,6 @@ export function siteSectionTemplate({
             value="${site}"
             ${isRefreshMode ? 'readonly class="readonly-input"' : 'placeholder="site-name"'}
           />
-          ${!isRefreshMode ? '<p class="input-hint">Please enter repoless site name as needed</p>' : ''}
         </div>
       </div>
 
@@ -165,14 +164,23 @@ export function blocksListTemplate({
 }) {
   const selectedCount = selectedBlocks.size;
   const totalCount = blocks.length;
+  const newCount = blocks.filter((b) => b.isNew).length;
+  const newCountText = newCount > 0 ? ` (${newCount} new)` : '';
 
   return `
     <div class="form-section">
       <div class="blocks-header">
-        <h2>Select Blocks <span class="heading-annotation">${selectedCount} of ${totalCount} blocks selected</span></h2>
-        <button id="toggle-all-blocks" class="action">
-          ${selectedCount === totalCount ? 'Deselect All' : 'Select All'}
-        </button>
+        <h2>Select Blocks <span class="heading-annotation">${selectedCount} of ${totalCount} blocks selected${newCountText}</span></h2>
+        <div class="blocks-actions">
+          <button id="toggle-all-blocks" class="action">
+            ${selectedCount === totalCount ? 'Deselect All' : 'Select All'}
+          </button>
+          ${newCount > 0 ? `
+            <button id="select-new-only" class="action">
+              Select New Only
+            </button>
+          ` : ''}
+        </div>
       </div>
 
       ${message}
@@ -187,6 +195,7 @@ export function blocksListTemplate({
                 ${selectedBlocks.has(block.name) ? 'checked' : ''}
               />
               <span class="block-name">${block.name}</span>
+              ${block.isNew ? '<span class="block-badge new">New</span>' : ''}
             </label>
           </li>
         `).join('')}
@@ -228,10 +237,12 @@ export function pagesSelectionTemplate({
     const basePath = `/${org}/${site}`;
     return `
         <div class="site-section">
-          <h4>${site}</h4>
-          <button class="select-pages-btn" data-site="${site}">
-            Select Pages (${(pageSelections[site] || new Set()).size} selected)
-          </button>
+          <div class="site-selection">
+            <button class="select-pages-btn" data-site="${site}">
+              Select (${(pageSelections[site] || new Set()).size})
+            </button>
+            <span class="site-label">from <strong>${site}</strong></span>
+          </div>
 
           ${(pageSelections[site] || new Set()).size > 0 ? `
             <div class="selected-pages-list">
@@ -264,6 +275,7 @@ export function initialStatusTemplate({
   repo,
   blocksCount,
   mode = 'setup',
+  libraryExists = false,
 }) {
   return `
     <div class="form-section">
@@ -275,6 +287,9 @@ export function initialStatusTemplate({
           </div>
           <div class="import-card-body">
             <p class="repo-path">${org}/${repo}</p>
+            <a href="https://github.com/${org}/${repo}" target="_blank" class="import-card-link">
+              View Repository →
+            </a>
           </div>
         </div>
 
@@ -285,33 +300,46 @@ export function initialStatusTemplate({
           </div>
           <div class="import-card-body">
             <p class="import-card-value">${blocksCount}</p>
+            <a href="https://da.live/#/${org}/${repo}/library/blocks" target="_blank" class="import-card-link">
+              View Blocks →
+            </a>
           </div>
         </div>
 
         <!-- Site Config (Green) - Only shown in setup mode -->
         ${mode === 'setup' ? `
-          <div class="import-card import-card-green">
+          <div class="import-card import-card-green import-card-pending">
             <div class="import-card-header">
               <h3>Site Config</h3>
             </div>
             <div class="import-card-body">
-              <p>Pending</p>
+              <p>Ready to configure</p>
+              ${libraryExists ? `
+                <a href="https://da.live/config#/${org}/${repo}/" target="_blank" class="import-card-link">
+                  View Config →
+                </a>
+              ` : ''}
             </div>
           </div>
         ` : ''}
 
         <!-- Block Docs (Cyan) -->
-        <div class="import-card import-card-cyan">
+        <div class="import-card import-card-cyan import-card-pending">
           <div class="import-card-header">
             <h3>Block Docs</h3>
           </div>
           <div class="import-card-body">
-            <p class="import-card-value">0/${blocksCount}</p>
+            <p>0 of ${blocksCount} processed</p>
+            ${libraryExists ? `
+              <a href="https://da.live/#/${org}/${repo}/library" target="_blank" class="import-card-link">
+                View Library →
+              </a>
+            ` : ''}
           </div>
         </div>
 
         <!-- Errors (Red) -->
-        <div class="import-card import-card-red">
+        <div class="import-card import-card-red import-card-pending">
           <div class="import-card-header">
             <h3>Errors</h3>
           </div>
@@ -330,7 +358,7 @@ export function processingTemplate({
   return `
     <div class="form-section">
       ${processStatus.currentStep ? `
-        <p class="current-step">${processStatus.currentStep}</p>
+        <p class="current-step ${processStatus.blockDocs.status === 'processing' ? 'processing' : ''}">${processStatus.currentStep}</p>
       ` : ''}
 
       <div class="status-cards-grid">
@@ -341,6 +369,9 @@ export function processingTemplate({
           </div>
           <div class="import-card-body">
             <p class="repo-path">${processStatus.github.org}/${processStatus.github.repo}</p>
+            <a href="https://github.com/${processStatus.github.org}/${processStatus.github.repo}" target="_blank" class="import-card-link">
+              View Repository →
+            </a>
           </div>
         </div>
 
@@ -351,6 +382,9 @@ export function processingTemplate({
           </div>
           <div class="import-card-body">
             <p class="import-card-value">${processStatus.blocks.total}</p>
+            <a href="https://da.live/#/${processStatus.github.org}/${processStatus.github.repo}/library/blocks" target="_blank" class="import-card-link">
+              View Blocks →
+            </a>
           </div>
         </div>
 
@@ -387,7 +421,7 @@ export function processingTemplate({
               <details class="error-details">
                 <summary>View errors</summary>
                 <ul class="error-list">
-                  ${processStatus.errors.messages.map((msg) => `<li>${msg}</li>`).join('')}
+                  ${processStatus.errors.messages.map((err) => `<li><strong>${err.block}:</strong> ${err.message}</li>`).join('')}
                 </ul>
               </details>
             ` : ''}
@@ -404,10 +438,8 @@ export function pagePickerModalTemplate({
   selectedPages,
   loading,
 }) {
-  // Helper to render an item
   const renderItem = (item) => {
     if (item.ext === 'html') {
-      // HTML file
       const isSelected = selectedPages.has(item.path);
       const displayName = item.name.replace('.html', '');
       return `
@@ -424,7 +456,6 @@ export function pagePickerModalTemplate({
         </div>
       `;
     }
-    // Folder
     return `
       <div class="tree-item folder-item" data-path="${item.path}">
         <button class="folder-toggle" data-folder-path="${item.path}">
@@ -486,6 +517,9 @@ export function finalStatusTemplate({ processStatus, org, repo }) {
           </div>
           <div class="import-card-body">
             <p class="repo-path">${processStatus.github.org}/${processStatus.github.repo}</p>
+            <a href="https://github.com/${processStatus.github.org}/${processStatus.github.repo}" target="_blank" class="import-card-link">
+              View Repository →
+            </a>
           </div>
         </div>
 
@@ -496,6 +530,9 @@ export function finalStatusTemplate({ processStatus, org, repo }) {
           </div>
           <div class="import-card-body">
             <p class="import-card-value">${processStatus.blocks.total}</p>
+            <a href="https://da.live/#/${org}/${repo}/library/blocks" target="_blank" class="import-card-link">
+              View Blocks →
+            </a>
           </div>
         </div>
 
@@ -538,7 +575,7 @@ export function finalStatusTemplate({ processStatus, org, repo }) {
               <details class="error-details" open>
                 <summary>View errors</summary>
                 <ul class="error-list">
-                  ${processStatus.errors.messages.map((msg) => `<li>${msg}</li>`).join('')}
+                  ${processStatus.errors.messages.map((err) => `<li><strong>${err.block}:</strong> ${err.message}</li>`).join('')}
                 </ul>
               </details>
             ` : ''}
@@ -598,6 +635,71 @@ export function resultsTemplate({
           </div>
         </div>
       ` : ''}
+    </div>
+  `;
+}
+
+export function errorModalTemplate(errors) {
+  if (!errors || errors.length === 0) return '';
+
+  const uploadErrors = errors.filter((e) => e.type === 'upload');
+  const previewErrors = errors.filter((e) => e.type === 'preview');
+  const generalErrors = errors.filter((e) => e.type === 'general');
+
+  return `
+    <div class="error-modal-overlay" id="error-modal">
+      <div class="error-modal">
+        <div class="error-modal-header">
+          <h2>Processing Errors</h2>
+          <button class="error-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="error-modal-content">
+          ${generalErrors.length > 0 ? `
+            <div class="error-section">
+              <h3>General Errors</h3>
+              <ul class="error-modal-list">
+                ${generalErrors.map((e) => `
+                  <li>
+                    <strong>Error:</strong> ${e.message}
+                  </li>
+                `).join('')}
+              </ul>
+            </div>
+          ` : ''}
+
+          ${uploadErrors.length > 0 ? `
+            <div class="error-section">
+              <h3>Upload Errors</h3>
+              <ul class="error-modal-list">
+                ${uploadErrors.map((e) => `
+                  <li>
+                    <strong>Block:</strong> ${e.block}<br>
+                    <strong>Error:</strong> ${e.message}
+                  </li>
+                `).join('')}
+              </ul>
+            </div>
+          ` : ''}
+
+          ${previewErrors.length > 0 ? `
+            <div class="error-section">
+              <h3>Preview Errors</h3>
+              <p class="error-note">These blocks were uploaded successfully but failed to preview.</p>
+              <ul class="error-modal-list">
+                ${previewErrors.map((e) => `
+                  <li>
+                    <strong>Block:</strong> ${e.block}<br>
+                    <strong>Error:</strong> ${e.message}
+                  </li>
+                `).join('')}
+              </ul>
+            </div>
+          ` : ''}
+        </div>
+        <div class="error-modal-footer">
+          <button class="button primary error-modal-close">Close</button>
+        </div>
+      </div>
     </div>
   `;
 }

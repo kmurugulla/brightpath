@@ -1,4 +1,5 @@
 /* eslint-disable import/no-absolute-path */
+
 /* eslint-disable import/no-unresolved */
 import DA_SDK from 'https://da.live/nx/utils/sdk.js';
 
@@ -7,6 +8,7 @@ import * as templates from './templates.js';
 import * as githubOps from '../operations/github.js';
 import * as libraryOps from '../operations/library.js';
 import * as pagesOps from '../operations/pages.js';
+import * as daApi from '../utils/da-api.js';
 import TokenStorage from '../utils/token-storage.js';
 import GitHubAPI from '../utils/github-api.js';
 
@@ -28,26 +30,12 @@ const app = {
       if (context?.repo) {
         state.site = context.repo;
       }
-
-      // eslint-disable-next-line no-console
-      console.log('DA SDK initialized:', {
-        hasContext: !!context,
-        hasToken: !!token,
-        org: context?.org,
-        repo: context?.repo,
-        autoPopulated: !!(context?.org && context?.repo),
-      });
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.warn('DA SDK not available (running outside DA.live):', error);
-
       const urlMatch = window.location.pathname.match(/^\/app\/([^/]+)\/([^/]+)/);
       if (urlMatch) {
         const [, org, site] = urlMatch;
         state.org = org;
         state.site = site;
-        // eslint-disable-next-line no-console
-        console.log('Auto-populated from URL:', { org: state.org, site: state.site });
       }
     }
 
@@ -59,7 +47,6 @@ const app = {
     this.render();
     this.attachEventListeners();
 
-    // Auto-load blocks if starting in refresh mode with org/site available
     if (state.mode === 'refresh' && state.org && state.site) {
       await this.handleLoadExistingBlocks();
     }
@@ -127,13 +114,15 @@ const app = {
       sections.push(templates.initialStatusTemplate({
         org: state.org,
         repo: state.repo,
-        blocksCount: state.selectedBlocks.size,
+        blocksCount: state.blocks.length,
         mode: state.mode,
+        libraryExists: state.libraryExists,
       }));
     }
 
     const content = sections.join('');
-    this.container.innerHTML = templates.appTemplate(content);
+    const errorModal = templates.errorModalTemplate(state.processStatus.errors.messages);
+    this.container.innerHTML = templates.appTemplate(content) + errorModal;
     this.attachEventListeners();
   },
 
@@ -218,6 +207,11 @@ const app = {
       toggleAllBtn.addEventListener('click', () => this.toggleAllBlocks());
     }
 
+    const selectNewOnlyBtn = document.getElementById('select-new-only');
+    if (selectNewOnlyBtn) {
+      selectNewOnlyBtn.addEventListener('click', () => this.selectNewBlocksOnly());
+    }
+
     document.querySelectorAll('.select-pages-btn').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         const { site } = e.target.dataset;
@@ -231,6 +225,25 @@ const app = {
         this.removePage(site, path);
       });
     });
+
+    const errorsCard = document.querySelector('.import-card.errors');
+    if (errorsCard && state.processStatus.errors.count > 0) {
+      errorsCard.style.cursor = 'pointer';
+      errorsCard.addEventListener('click', () => this.showErrorModal());
+    }
+
+    document.querySelectorAll('.error-modal-close').forEach((btn) => {
+      btn.addEventListener('click', () => this.hideErrorModal());
+    });
+
+    const errorModalOverlay = document.getElementById('error-modal');
+    if (errorModalOverlay) {
+      errorModalOverlay.addEventListener('click', (e) => {
+        if (e.target === errorModalOverlay) {
+          this.hideErrorModal();
+        }
+      });
+    }
   },
 
   async handleModeChange(newMode) {
@@ -295,7 +308,6 @@ const app = {
   async validateRepository() {
     state.validating = true;
     this.render();
-
     try {
       const result = await githubOps.validateRepository(state.org, state.repo, state.githubToken);
 
@@ -382,7 +394,10 @@ const app = {
         return;
       }
 
-      state.blocks = blocks;
+      state.blocks = blocks.map((block) => ({
+        ...block,
+        isNew: false,
+      }));
       state.blocksDiscovered = true;
       state.discovering = false;
       state.selectedBlocks = new Set(blocks.map((b) => b.name));
@@ -400,10 +415,23 @@ const app = {
   async discoverBlocks() {
     state.discovering = true;
     this.render();
-
     try {
       const blocks = await githubOps.discoverBlocks(state.org, state.repo, state.githubToken);
-      state.blocks = blocks;
+
+      const existingBlocksJSON = await daApi.fetchBlocksJSON(state.org, state.site);
+
+      const existingBlockNames = new Set(
+        existingBlocksJSON?.data?.data?.map((b) => {
+          const pathParts = b.path.split('/');
+          return pathParts[pathParts.length - 1]; // Get last part of path (kebab-case name)
+        }) || [],
+      );
+
+      state.blocks = blocks.map((block) => ({
+        ...block,
+        isNew: !existingBlockNames.has(block.name),
+      }));
+
       state.blocksDiscovered = true;
       state.discovering = false;
 
@@ -443,7 +471,6 @@ const app = {
       currentStep: state.mode === 'refresh' ? 'Starting documentation refresh...' : 'Starting library setup...',
     };
 
-    // Only include siteConfig and blocksJson status in setup mode (not refresh)
     if (state.mode === 'setup') {
       baseStatus.siteConfig = { status: 'pending', message: '' };
       baseStatus.blocksJson = { status: 'pending', message: '' };
@@ -461,14 +488,6 @@ const app = {
         pages: Array.from(state.pageSelections[site] || []),
       }));
 
-      // eslint-disable-next-line no-console
-      console.log('Starting library setup:', {
-        org: state.org,
-        site: state.site,
-        blocks: selectedBlockNames,
-        pages: sitesWithPages,
-      });
-
       let githubApi = null;
       if (state.mode === 'setup' && state.org && state.repo) {
         githubApi = new GitHubAPI(state.org, state.repo, 'main', state.githubToken);
@@ -484,9 +503,6 @@ const app = {
         githubApi,
       });
 
-      // eslint-disable-next-line no-console
-      console.log('Setup results:', results);
-
       if (!results.success) {
         throw new Error(results.error || 'Library setup failed');
       }
@@ -495,12 +511,13 @@ const app = {
       state.message = '';
       state.messageType = '';
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('Processing error:', error);
-
       state.processStatus.currentStep = `✗ Error: ${error.message}`;
       state.processStatus.errors.count += 1;
-      state.processStatus.errors.messages.push(error.message);
+      state.processStatus.errors.messages.push({
+        type: 'general',
+        block: 'N/A',
+        message: error.message,
+      });
       state.message = `Processing failed: ${error.message}`;
       state.messageType = 'error';
     } finally {
@@ -510,16 +527,12 @@ const app = {
   },
 
   handleProgress(progress) {
-    // eslint-disable-next-line no-console
-    console.log('Progress update:', progress);
-
     if (progress.step === 'register') {
-      // Only update siteConfig status if it exists (setup mode only)
       if (state.processStatus.siteConfig) {
         if (progress.status === 'start') {
           state.processStatus.siteConfig.status = 'processing';
           state.processStatus.siteConfig.message = 'Registering library...';
-          state.processStatus.currentStep = 'Registering library in site configuration...';
+          state.processStatus.currentStep = 'Configuring the Library...';
         } else if (progress.status === 'complete') {
           state.processStatus.siteConfig.status = 'complete';
           state.processStatus.siteConfig.message = 'Updated Site Config';
@@ -528,41 +541,50 @@ const app = {
             : 'Library already registered in config.json';
         }
       }
-    } else if (progress.step === 'extract') {
-      if (progress.status === 'start') {
-        state.processStatus.currentStep = `Extracting block examples from ${progress.totalPages} sample pages...`;
-      } else if (progress.status === 'complete') {
-        state.processStatus.currentStep = 'Extracted block examples from sample pages';
-      }
-    } else if (progress.step === 'generate') {
-      if (progress.status === 'start') {
-        state.processStatus.blockDocs.status = 'processing';
-        state.processStatus.currentStep = `Generating documentation for ${progress.totalBlocks} blocks...`;
-      } else if (progress.status === 'complete') {
-        state.processStatus.currentStep = `Generated ${progress.totalBlocks} block documentation files`;
-      }
+    } else if (progress.step === 'extract' && progress.status === 'start') {
+      state.processStatus.currentStep = 'Configuring the Library...';
+    } else if (progress.step === 'generate' && progress.status === 'start') {
+      state.processStatus.blockDocs.status = 'processing';
+      state.processStatus.currentStep = 'Configuring the Library...';
     } else if (progress.step === 'upload') {
       if (progress.status === 'start') {
         state.processStatus.blockDocs.status = 'processing';
-        state.processStatus.currentStep = 'Uploading block documentation...';
+        state.processStatus.currentStep = 'Configuring the Library...';
       } else if (progress.current && progress.total) {
         state.processStatus.blockDocs.created = progress.current;
         state.processStatus.blockDocs.status = 'processing';
-        state.processStatus.currentStep = `Uploading blocks... ${progress.current}/${progress.total}`;
       } else if (progress.status === 'complete') {
-        const successCount = progress.uploadResults.filter((r) => r.success).length;
-        const errorCount = progress.uploadResults.length - successCount;
+        const uploadSuccessCount = progress.uploadResults.filter((r) => r.success).length;
+        const uploadErrorCount = progress.uploadResults.length - uploadSuccessCount;
+        const previewFailures = progress.uploadResults
+          .filter((r) => r.success && !r.previewSuccess);
+        const previewErrorCount = previewFailures.length;
 
         state.processResults = progress.uploadResults;
-        state.processStatus.blockDocs.created = successCount;
-        state.processStatus.blockDocs.status = errorCount > 0 ? 'warning' : 'complete';
-        state.processStatus.currentStep = `Uploaded ${successCount} block documents`;
+        state.processStatus.blockDocs.created = uploadSuccessCount;
+        state.processStatus.blockDocs.status = (uploadErrorCount + previewErrorCount) > 0 ? 'warning' : 'complete';
+        state.processStatus.currentStep = `uploaded ${uploadSuccessCount} block documents`;
 
-        if (errorCount > 0) {
-          state.processStatus.errors.count += errorCount;
+        if (uploadErrorCount > 0) {
+          state.processStatus.errors.count += uploadErrorCount;
           progress.uploadResults
             .filter((r) => !r.success)
-            .forEach((r) => state.processStatus.errors.messages.push(`${r.name}: ${r.error}`));
+            .forEach((r) => state.processStatus.errors.messages.push({
+              type: 'upload',
+              block: r.name,
+              message: r.error,
+            }));
+        }
+
+        if (previewErrorCount > 0) {
+          state.processStatus.errors.count += previewErrorCount;
+          progress.uploadResults
+            .filter((r) => r.success && !r.previewSuccess)
+            .forEach((r) => state.processStatus.errors.messages.push({
+              type: 'preview',
+              block: r.name,
+              message: r.previewError,
+            }));
         }
       }
     } else if (progress.step === 'blocks-json') {
@@ -572,9 +594,7 @@ const app = {
           state.processStatus.blocksJson.message = state.libraryExists
             ? 'Updating...'
             : 'Creating...';
-          state.processStatus.currentStep = state.libraryExists
-            ? 'Updating blocks.json configuration...'
-            : 'Creating blocks.json configuration...';
+          state.processStatus.currentStep = 'Configuring the Library...';
         } else if (progress.status === 'complete') {
           state.processStatus.blocksJson.status = 'complete';
           state.processStatus.blocksJson.message = state.libraryExists
@@ -596,6 +616,14 @@ const app = {
     } else {
       state.blocks.forEach((block) => state.selectedBlocks.add(block.name));
     }
+    this.render();
+  },
+
+  selectNewBlocksOnly() {
+    state.selectedBlocks.clear();
+    state.blocks
+      .filter((block) => block.isNew)
+      .forEach((block) => state.selectedBlocks.add(block.name));
     this.render();
   },
 
@@ -643,9 +671,6 @@ const app = {
       state.loadingPages = false;
       this.renderPagePickerModal();
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('Page picker error:', error);
-
       const errorMsg = error.message.includes('401')
         ? 'Authentication failed. Please ensure you are logged in to DA.live.'
         : `Failed to load pages: ${error.message}`;
@@ -820,6 +845,20 @@ const app = {
       state.pageSelections[site].delete(path);
     }
     this.render();
+  },
+
+  showErrorModal() {
+    const modal = document.getElementById('error-modal');
+    if (modal) {
+      modal.style.display = 'flex';
+    }
+  },
+
+  hideErrorModal() {
+    const modal = document.getElementById('error-modal');
+    if (modal) {
+      modal.style.display = 'none';
+    }
   },
 };
 

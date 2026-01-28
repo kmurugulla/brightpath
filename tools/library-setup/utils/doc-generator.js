@@ -2,12 +2,9 @@ import { generateBlockPlaceholder } from './block-analysis.js';
 
 export function generateBlockHTML(block, examples = []) {
   const {
-    name, variants = [], description = '', analysis = null,
+    name, variants = [], analysis = null,
   } = block;
 
-  const capitalizedName = name.charAt(0).toUpperCase() + name.slice(1);
-
-  let autoDescription = description || `${capitalizedName} block`;
   let detectedVariants = variants;
   let placeholderContent = `        <div>
           <div>
@@ -17,19 +14,11 @@ export function generateBlockHTML(block, examples = []) {
 
   if (analysis && examples.length === 0) {
     const blockData = generateBlockPlaceholder(name, analysis);
-    autoDescription = description || blockData.description;
     detectedVariants = analysis.variants && analysis.variants.length > 0
       ? analysis.variants
       : variants;
     placeholderContent = blockData.placeholder;
   }
-
-  // eslint-disable-next-line no-console
-  console.log(`Generating HTML for ${name}:`, {
-    examplesCount: examples.length,
-    variants: detectedVariants,
-    hasAnalysis: !!analysis,
-  });
 
   const variantsToGenerate = detectedVariants.length > 0 ? detectedVariants : [''];
 
@@ -43,7 +32,6 @@ export function generateBlockHTML(block, examples = []) {
   });
 
   const blockSections = variantsToGenerate.map((variant) => {
-    const variantName = variant ? `${capitalizedName} (${variant})` : capitalizedName;
     const classAttr = variant ? ` ${variant}` : '';
 
     const variantExamples = examplesByVariant[variant] || [];
@@ -51,25 +39,11 @@ export function generateBlockHTML(block, examples = []) {
     let content;
     if (variantExamples.length > 0) {
       content = variantExamples[0].html;
-      // eslint-disable-next-line no-console
-      console.log(`Using extracted content for ${name} (${variant || 'default'})`);
     } else {
       content = placeholderContent;
-      // eslint-disable-next-line no-console
-      console.log(`Using ${analysis ? 'analyzed' : 'generic'} placeholder for ${name} (${variant || 'default'})`);
     }
 
     return `    <div>
-      <div class="library-metadata">
-        <div>
-          <div>name</div>
-          <div>${variantName}</div>
-        </div>
-        <div>
-          <div>description</div>
-          <div>${autoDescription}</div>
-        </div>
-      </div>
       <div class="${name}${classAttr}">
 ${content}
       </div>
@@ -85,9 +59,16 @@ ${blockSections}
 </body>`;
 }
 
+function toDisplayName(name) {
+  return name
+    .split('-')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
 export function generateBlocksJSON(blocks, org, site) {
   const dataSheet = blocks.map((block) => ({
-    name: block.name,
+    name: toDisplayName(block.name),
     path: block.path || `https://content.da.live/${org}/${site}/library/blocks/${block.name}`,
   }));
 

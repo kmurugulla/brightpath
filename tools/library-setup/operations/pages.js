@@ -5,26 +5,12 @@ const DA_ADMIN = 'https://admin.da.live';
 async function daFetch(url) {
   const token = state.daToken;
 
-  // eslint-disable-next-line no-console
-  console.log('Pages fetch:', {
-    url,
-    hasToken: !!token,
-    tokenPreview: token ? `${token.substring(0, 10)}...` : 'none',
-  });
-
   const headers = {};
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
 
   const response = await fetch(url, { headers });
-
-  // eslint-disable-next-line no-console
-  console.log('Pages response:', {
-    url,
-    status: response.status,
-    ok: response.ok,
-  });
 
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -34,27 +20,16 @@ async function daFetch(url) {
 }
 
 export async function fetchSitePages(org, site) {
-  try {
-    const url = `${DA_ADMIN}/list/${org}/${site}/`;
-    const items = await daFetch(url);
+  const url = `${DA_ADMIN}/list/${org}/${site}/`;
+  const items = await daFetch(url);
 
-    if (!Array.isArray(items)) {
-      return [];
-    }
-
-    const result = items.filter((item) => !item.ext || item.ext === 'html');
-
-    // eslint-disable-next-line no-console
-    console.log(`Found ${result.length} items for ${org}/${site}`);
-    // eslint-disable-next-line no-console
-    console.log('Sample paths:', result.slice(0, 3).map((item) => item.path));
-
-    return result;
-  } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('Failed to fetch site items:', error);
-    throw error;
+  if (!Array.isArray(items)) {
+    return [];
   }
+
+  const result = items.filter((item) => !item.ext || item.ext === 'html');
+
+  return result;
 }
 
 export async function loadFolderContents(org, site, path) {
@@ -63,13 +38,6 @@ export async function loadFolderContents(org, site, path) {
     const relativePath = path.startsWith(prefix) ? path.substring(prefix.length) : path;
     const url = `${DA_ADMIN}/list/${org}/${site}${relativePath}`;
 
-    // eslint-disable-next-line no-console
-    console.log('Loading folder:', {
-      fullPath: path,
-      relativePath,
-      url,
-    });
-
     const items = await daFetch(url);
 
     if (!Array.isArray(items)) {
@@ -78,13 +46,8 @@ export async function loadFolderContents(org, site, path) {
 
     const result = items.filter((item) => !item.ext || item.ext === 'html');
 
-    // eslint-disable-next-line no-console
-    console.log(`Loaded folder contents for ${path}:`, result.length, 'items', result);
-
     return result;
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('Failed to load folder:', error);
     return [];
   }
 }

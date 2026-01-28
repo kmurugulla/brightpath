@@ -5,13 +5,6 @@ const DA_ADMIN = 'https://admin.da.live';
 async function daFetch(url, options = {}) {
   const token = state.daToken;
 
-  // eslint-disable-next-line no-console
-  console.log('DA Fetch:', {
-    url,
-    method: options.method || 'GET',
-    hasToken: !!token,
-  });
-
   const headers = {
     ...options.headers,
   };
@@ -21,14 +14,6 @@ async function daFetch(url, options = {}) {
   }
 
   const response = await fetch(url, { ...options, headers });
-
-  // eslint-disable-next-line no-console
-  console.log('DA Response:', {
-    url,
-    status: response.status,
-    statusText: response.statusText,
-    ok: response.ok,
-  });
 
   return response;
 }
@@ -53,7 +38,28 @@ export async function fetchSiteConfig(org, site) {
   }
 }
 
-export async function uploadBlockDoc(org, site, blockName, htmlContent) {
+async function previewBlockDoc(org, site, blockName) {
+  const path = `/${org}/${site}/main/library/blocks/${blockName}`;
+  const url = `https://admin.hlx.page/preview${path}`;
+
+  try {
+    const response = await daFetch(url, {
+      method: 'POST',
+    });
+
+    return {
+      success: response.ok,
+      error: response.ok ? null : `Preview failed: ${response.status}`,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+}
+
+export async function uploadBlockDoc(org, site, blockName, htmlContent, onProgress) {
   const path = `/${org}/${site}/library/blocks/${blockName}`;
   const url = `${DA_ADMIN}/source${path}.html`;
 
@@ -71,10 +77,18 @@ export async function uploadBlockDoc(org, site, blockName, htmlContent) {
       throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
     }
 
+    if (onProgress) {
+      onProgress({ status: 'previewing' });
+    }
+
+    const previewResult = await previewBlockDoc(org, site, blockName);
+
     return {
       success: true,
       path,
       error: null,
+      previewSuccess: previewResult.success,
+      previewError: previewResult.error,
     };
   } catch (error) {
     return {
@@ -180,7 +194,22 @@ export async function batchUploadBlocks(org, site, blocks, onProgress, batchSize
         });
       }
 
-      const result = await uploadBlockDoc(org, site, block.name, block.html);
+      const result = await uploadBlockDoc(
+        org,
+        site,
+        block.name,
+        block.html,
+        (uploadProgress) => {
+          if (onProgress && uploadProgress.status === 'previewing') {
+            onProgress({
+              current: currentIndex + 1,
+              total: blocks.length,
+              blockName: block.name,
+              status: 'previewing',
+            });
+          }
+        },
+      );
       processed += 1;
 
       if (onProgress) {

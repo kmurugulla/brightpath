@@ -8,22 +8,15 @@ async function fetchPageHTML(org, site, pagePath) {
   const cleanPath = htmlPath.startsWith('/') ? htmlPath.slice(1) : htmlPath;
   const url = `${DA_SOURCE}/${cleanPath}`;
 
-  // eslint-disable-next-line no-console
-  console.log('Fetching page content:', url);
-
   const response = await fetch(url, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
 
   if (!response.ok) {
-    // eslint-disable-next-line no-console
-    console.error(`Failed to fetch ${htmlPath}: ${response.status}`);
     throw new Error(`Failed to fetch page ${pagePath}: ${response.status}`);
   }
 
   const html = await response.text();
-  // eslint-disable-next-line no-console
-  console.log(`Fetched ${htmlPath}, length: ${html.length} chars`);
 
   return html;
 }
@@ -31,9 +24,6 @@ async function fetchPageHTML(org, site, pagePath) {
 function extractBlocksFromHTML(html, blockName) {
   const instances = [];
   const openTagRegex = new RegExp(`<div([^>]*class="[^"]*\\b${blockName}\\b[^"]*"[^>]*)>`, 'gi');
-
-  // eslint-disable-next-line no-console
-  console.log(`Looking for blocks with class: ${blockName}`);
 
   const matches = Array.from(html.matchAll(openTagRegex));
 
@@ -72,8 +62,6 @@ function extractBlocksFromHTML(html, blockName) {
               html: content,
               variant,
             });
-            // eslint-disable-next-line no-console
-            console.log(`  Found ${blockName} (${variant || 'default'}), content length: ${content.length}`);
           }
           break;
         }
@@ -130,19 +118,9 @@ export default async function extractExamplesWithProgress(sitesWithPages, blockN
 
       processed += 1;
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error(`Error extracting from ${pagePath}:`, error.message);
       processed += 1;
     }
   }, Promise.resolve());
-
-  // eslint-disable-next-line no-console
-  console.log('Extraction complete. Summary:');
-  blockNames.forEach((blockName) => {
-    const count = examplesByBlock[blockName].length;
-    // eslint-disable-next-line no-console
-    console.log(`  ${blockName}: ${count} examples found`);
-  });
 
   return examplesByBlock;
 }

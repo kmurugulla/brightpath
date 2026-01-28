@@ -26,11 +26,19 @@ export async function checkLibraryExists(org, site) {
 export async function fetchExistingBlocks(org, site) {
   const blocksJSON = await fetchBlocksJSON(org, site);
   if (blocksJSON && blocksJSON.data && blocksJSON.data.data) {
-    return blocksJSON.data.data.map((block) => ({
-      name: block.name,
-      path: block.path,
-      isAutoBlock: false,
-    }));
+    const autoBlocks = new Set(['header', 'footer', 'fragment']);
+
+    return blocksJSON.data.data
+      .filter((block) => {
+        const pathParts = block.path.split('/');
+        const kebabName = pathParts[pathParts.length - 1];
+        return !autoBlocks.has(kebabName.toLowerCase());
+      })
+      .map((block) => ({
+        name: block.name,
+        path: block.path,
+        isAutoBlock: false,
+      }));
   }
   return [];
 }
@@ -61,7 +69,7 @@ export async function generateBlockDocs(blocks, examplesByBlock, api = null) {
       try {
         analysis = await analyzeBlock(api, blockName);
       } catch (error) {
-        // do nothing
+        // ignore
       }
     }
 
@@ -92,16 +100,32 @@ export async function updateLibraryBlocksJSON(org, site, blockNames) {
       existingOptions = existingBlocksJSON.options;
     }
   } catch (error) {
-    // do nothing
+    // ignore
   }
 
-  const blockNamesSet = new Set(blockNames);
-  const preservedBlocks = existingBlocks.filter((block) => !blockNamesSet.has(block.name));
+  const existingBlockMap = new Map(
+    existingBlocks.map((block) => {
+      const pathParts = block.path.split('/');
+      const kebabName = pathParts[pathParts.length - 1];
+      return [kebabName, block];
+    }),
+  );
 
-  const newBlocks = blockNames.map((name) => ({
-    name,
-    path: `https://content.da.live/${org}/${site}/library/blocks/${name}`,
-  }));
+  const autoBlocks = new Set(['header', 'footer']);
+  const blockNamesSet = new Set(blockNames);
+  const preservedBlocks = existingBlocks.filter((block) => {
+    const pathParts = block.path.split('/');
+    const kebabName = pathParts[pathParts.length - 1];
+    return !blockNamesSet.has(kebabName) && !autoBlocks.has(kebabName.toLowerCase());
+  });
+
+  const newBlocks = blockNames.map((name) => {
+    const existing = existingBlockMap.get(name);
+    return {
+      name,
+      path: existing?.path || `https://content.da.live/${org}/${site}/library/blocks/${name}`,
+    };
+  });
 
   const mergedBlocks = [...preservedBlocks, ...newBlocks];
 
@@ -134,7 +158,6 @@ export async function setupLibrary({
   };
 
   try {
-    // Skip site config registration when refreshing existing documentation
     if (!skipSiteConfig) {
       onProgress?.({ step: 'register', status: 'start' });
       const registration = await setupLibraryConfig(org, site);

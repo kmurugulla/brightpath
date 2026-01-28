@@ -18,6 +18,8 @@ Use this mode to create a new block library from scratch:
 - Enter your GitHub repository URL to discover blocks
 - Private repositories supported - enter a GitHub token when prompted
 - Select which blocks to include in your library
+- New blocks detected automatically - visual indicators show blocks not yet in blocks.json
+- Use "Select New Only" button to quickly select just the newly discovered blocks
 - Blocks are automatically analyzed for structure, variants, and features
 - Placeholder documentation generated based on block code analysis
 - Optionally select sample pages to extract real content examples
