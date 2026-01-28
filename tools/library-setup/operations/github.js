@@ -22,11 +22,31 @@ export async function validateRepository(org, repo, token = null) {
   return api.validateAccess();
 }
 
+async function findScriptsFile(api) {
+  try {
+    const url = `https://api.github.com/repos/${api.org}/${api.repo}/git/trees/${api.branch}?recursive=1`;
+    const response = await fetch(url, { headers: GitHubAPI.getHeaders(api.token) });
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const scriptsPattern = /(^|\/)scripts\/scripts\.js$/;
+    const scriptsFile = data.tree.find((item) => scriptsPattern.test(item.path) && item.type === 'blob');
+
+    return scriptsFile ? scriptsFile.path : null;
+  } catch (error) {
+    return null;
+  }
+}
+
 async function detectAutoBlocks(api) {
   const autoBlocks = new Set();
 
   try {
-    const scriptsContent = await api.getFileContent('scripts/scripts.js');
+    const scriptsPath = await findScriptsFile(api);
+    if (!scriptsPath) return autoBlocks;
+
+    const scriptsContent = await api.getFileContent(scriptsPath);
     if (!scriptsContent) return autoBlocks;
 
     const buildBlockRegex = /buildBlock\(['"`](\w+)['"`]/g;

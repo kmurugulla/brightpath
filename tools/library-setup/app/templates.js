@@ -170,23 +170,26 @@ export function blocksListTemplate({
   return `
     <div class="form-section">
       <div class="blocks-header">
-        <h2>Select Blocks <span class="heading-annotation">${selectedCount} of ${totalCount} blocks selected${newCountText}</span></h2>
-        <div class="blocks-actions">
-          <button id="toggle-all-blocks" class="action">
-            ${selectedCount === totalCount ? 'Deselect All' : 'Select All'}
-          </button>
-          ${newCount > 0 ? `
-            <button id="select-new-only" class="action">
-              Select New Only
+        <h2>${totalCount === 0 ? 'No Blocks Found' : `Select Blocks <span class="heading-annotation">${selectedCount} of ${totalCount} blocks selected${newCountText}</span>`}</h2>
+        ${totalCount > 0 ? `
+          <div class="blocks-actions">
+            <button id="toggle-all-blocks" class="action">
+              ${selectedCount === totalCount ? 'Deselect All' : 'Select All'}
             </button>
-          ` : ''}
-        </div>
+            ${newCount > 0 ? `
+              <button id="select-new-only" class="action">
+                Select New Only
+              </button>
+            ` : ''}
+          </div>
+        ` : ''}
       </div>
 
       ${message}
 
-      <ul class="blocks-list">
-        ${blocks.map((block) => `
+      ${totalCount > 0 ? `
+        <ul class="blocks-list">
+          ${blocks.map((block) => `
           <li class="block-item ${selectedBlocks.has(block.name) ? 'selected' : ''}">
             <label>
               <input
@@ -199,7 +202,8 @@ export function blocksListTemplate({
             </label>
           </li>
         `).join('')}
-      </ul>
+        </ul>
+      ` : ''}
     </div>
   `;
 }

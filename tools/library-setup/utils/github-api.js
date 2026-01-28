@@ -88,11 +88,13 @@ export default class GitHubAPI {
 
       const data = await response.json();
 
-      const blockFiles = data.tree.filter((item) => item.path.startsWith('blocks/') && item.type === 'tree');
+      const blocksPattern = /(^|\/)blocks\//;
+      const blockFiles = data.tree.filter((item) => blocksPattern.test(item.path) && item.type === 'tree');
 
       const blocks = blockFiles.map((item) => {
         const pathParts = item.path.split('/');
-        const blockName = pathParts[1]; // blocks/{blockName}/...
+        const blocksIndex = pathParts.indexOf('blocks');
+        const blockName = pathParts[blocksIndex + 1];
         return {
           name: blockName,
           path: item.path,
