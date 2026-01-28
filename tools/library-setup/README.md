@@ -2,6 +2,13 @@
 
 Generate block documentation for your DA.live library from GitHub repositories.
 
+## Getting Started
+
+- Copy the `library-setup` folder into your project's `tools/` directory
+- Access via: `https://da.live/app/{org}/{site}/tools/library-setup/library-setup?ref=local`
+- `ref=local` points to your local development server
+- Customize the code as needed for your project
+
 ## Setup Mode
 
 ![Library Setup Mode](./images/setup-mode.png)
@@ -34,5 +41,6 @@ Use this mode to update existing block documentation with new content:
 ## Requirements
 
 - Must be run from within DA.live for authentication
+- Write access to CONFIG for your organization (required to update site configuration)
 - GitHub token needed only for private repositories (can be saved for future use)
 - Sample pages optional - tool generates intelligent placeholders without them
