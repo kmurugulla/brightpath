@@ -34,6 +34,12 @@ const state = {
   processResults: [],
   message: '',
   messageType: 'info',
+  errors: {
+    github: '',
+    site: '',
+    blocks: '',
+    pages: '',
+  },
 };
 
 export default state;

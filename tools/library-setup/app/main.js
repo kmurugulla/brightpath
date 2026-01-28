@@ -77,7 +77,7 @@ const app = {
         isValidated: state.repositoryValidated,
         validating: state.validating,
         githubUrl: state.githubUrl,
-        message: templates.messageTemplate(state.message, state.messageType),
+        message: state.errors.github ? templates.messageTemplate(state.errors.github, 'error') : '',
       }));
 
       if (state.needsToken && !state.repositoryValidated) {
@@ -91,7 +91,7 @@ const app = {
       sections.push(templates.siteSectionTemplate({
         org: state.org,
         site: state.site,
-        message: templates.messageTemplate(state.message, state.messageType),
+        message: state.errors.site ? templates.messageTemplate(state.errors.site, 'error') : '',
         mode: state.mode,
       }));
     }
@@ -100,7 +100,7 @@ const app = {
       sections.push(templates.blocksListTemplate({
         blocks: state.blocks,
         selectedBlocks: state.selectedBlocks,
-        message: state.mode === 'refresh' ? '' : templates.messageTemplate(state.message, state.messageType),
+        message: state.errors.blocks ? templates.messageTemplate(state.errors.blocks, 'error') : '',
       }));
     }
 
@@ -108,7 +108,7 @@ const app = {
       sections.push(templates.pagesSelectionTemplate({
         allSites: this.getAllSites(),
         pageSelections: state.pageSelections,
-        message: state.mode === 'refresh' ? '' : templates.messageTemplate(state.message, state.messageType),
+        message: state.errors.pages ? templates.messageTemplate(state.errors.pages, 'error') : '',
         daToken: state.daToken,
         org: state.org,
         mode: state.mode,
@@ -151,6 +151,7 @@ const app = {
     if (githubUrlInput && !state.repositoryValidated) {
       githubUrlInput.addEventListener('input', (e) => {
         state.githubUrl = e.target.value;
+        state.errors.github = '';
       });
 
       githubUrlInput.addEventListener('blur', (e) => this.handleGitHubUrlChange(e.target.value));
@@ -167,6 +168,7 @@ const app = {
     if (orgInput) {
       orgInput.addEventListener('input', (e) => {
         state.org = e.target.value.trim();
+        state.errors.site = '';
       });
     }
 
@@ -174,6 +176,7 @@ const app = {
     if (siteInput) {
       siteInput.addEventListener('input', (e) => {
         state.site = e.target.value.trim();
+        state.errors.site = '';
       });
     }
 
@@ -234,6 +237,7 @@ const app = {
     state.mode = newMode;
     state.message = '';
     state.messageType = 'info';
+    state.errors = { github: '', site: '', blocks: '', pages: '' };
 
     if (newMode === 'refresh') {
       state.repositoryValidated = false;
@@ -296,15 +300,13 @@ const app = {
       if (!result.valid) {
         if (result.error === 'private' && result.needsToken) {
           state.needsToken = true;
-          state.message = 'Unable to access repository. If this is a private repository, please enter a GitHub token below.';
-          state.messageType = 'error';
+          state.errors.github = 'Unable to access repository. If this is a private repository, please enter a GitHub token below.';
           state.validating = false;
           this.render();
           return;
         }
 
-        state.message = result.error === 'private' ? 'Unable to access repository with provided token.' : result.error;
-        state.messageType = 'error';
+        state.errors.github = result.error === 'private' ? 'Unable to access repository with provided token.' : result.error;
         state.validating = false;
         this.render();
         return;
@@ -337,8 +339,7 @@ const app = {
     const token = tokenInput?.value.trim();
 
     if (!token) {
-      state.message = 'Please enter a GitHub token';
-      state.messageType = 'error';
+      state.errors.github = 'Please enter a GitHub token';
       this.render();
       return;
     }
@@ -361,8 +362,7 @@ const app = {
 
   async handleLoadExistingBlocks() {
     if (!state.org || !state.site) {
-      state.message = 'Please enter both organization and site name';
-      state.messageType = 'error';
+      state.errors.site = 'Please enter both organization and site name';
       this.render();
       return;
     }
@@ -374,8 +374,7 @@ const app = {
       const blocks = await libraryOps.fetchExistingBlocks(state.org, state.site);
 
       if (blocks.length === 0) {
-        state.message = 'No library found at this location. Please run "Library Setup" first to create the library.';
-        state.messageType = 'error';
+        state.errors.site = 'No library found at this location. Please run "Library Setup" first to create the library.';
         state.discovering = false;
         this.render();
         return;
@@ -385,12 +384,10 @@ const app = {
       state.blocksDiscovered = true;
       state.discovering = false;
       state.selectedBlocks = new Set(blocks.map((b) => b.name));
-      state.message = '';
-      state.messageType = 'info';
+      state.errors = { github: '', site: '', blocks: '', pages: '' };
       this.render();
     } catch (error) {
-      state.message = `Unable to load library: ${error.message}. Please run "Library Setup" first to create the library.`;
-      state.messageType = 'error';
+      state.errors.site = `Unable to load library: ${error.message}. Please run "Library Setup" first to create the library.`;
       state.discovering = false;
       this.render();
     }
@@ -413,8 +410,7 @@ const app = {
 
       this.render();
     } catch (error) {
-      state.message = `Block discovery failed: ${error.message}`;
-      state.messageType = 'error';
+      state.errors.github = `Block discovery failed: ${error.message}`;
       state.discovering = false;
       this.render();
     }
@@ -422,16 +418,14 @@ const app = {
 
   async handleStartProcessing() {
     if (!state.daToken) {
-      state.message = 'DA.live authentication required. This tool must be run from within DA.live.';
-      state.messageType = 'error';
+      state.errors.pages = 'DA.live authentication required. This tool must be run from within DA.live.';
       this.render();
       return;
     }
 
     const siteValid = await this.validateSite(state.org, state.site, state.daToken);
     if (!siteValid) {
-      state.message = `Site "${state.org}/${state.site}" not found in DA.live. Cannot create library.`;
-      state.messageType = 'error';
+      state.errors.site = `Site "${state.org}/${state.site}" not found in DA.live. Please verify the site name.`;
       this.render();
       return;
     }
@@ -622,16 +616,14 @@ const app = {
 
   async openPagePicker(site) {
     if (!state.daToken) {
-      state.message = 'DA.live authentication required. This tool must be run from within DA.live.';
-      state.messageType = 'error';
+      state.errors.pages = 'DA.live authentication required. This tool must be run from within DA.live.';
       this.render();
       return;
     }
 
     const siteValid = await this.validateSite(state.org, site, state.daToken);
     if (!siteValid) {
-      state.message = `Site "${state.org}/${site}" not found in DA.live. Please verify the site name.`;
-      state.messageType = 'error';
+      state.errors.pages = `Site "${state.org}/${site}" not found in DA.live. Please verify the site name.`;
       this.render();
       return;
     }
@@ -654,8 +646,7 @@ const app = {
         ? 'Authentication failed. Please ensure you are logged in to DA.live.'
         : `Failed to load pages: ${error.message}`;
 
-      state.message = errorMsg;
-      state.messageType = 'error';
+      state.errors.pages = errorMsg;
       state.loadingPages = false;
       state.showPagePicker = false;
       this.render();

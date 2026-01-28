@@ -85,7 +85,7 @@ function extractBlocksFromHTML(html, blockName) {
   return instances;
 }
 
-export async function extractExamplesWithProgress(sitesWithPages, blockNames, onProgress) {
+export default async function extractExamplesWithProgress(sitesWithPages, blockNames, onProgress) {
   const examplesByBlock = {};
 
   blockNames.forEach((blockName) => {

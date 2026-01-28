@@ -1,7 +1,9 @@
-import { generateBlockPlaceholder, generateAutoDescription } from './block-analysis.js';
+import { generateBlockPlaceholder } from './block-analysis.js';
 
 export function generateBlockHTML(block, examples = []) {
-  const { name, variants = [], description = '', analysis = null } = block;
+  const {
+    name, variants = [], description = '', analysis = null,
+  } = block;
 
   const capitalizedName = name.charAt(0).toUpperCase() + name.slice(1);
 
