@@ -237,7 +237,9 @@ const app = {
     state.mode = newMode;
     state.message = '';
     state.messageType = 'info';
-    state.errors = { github: '', site: '', blocks: '', pages: '' };
+    state.errors = {
+      github: '', site: '', blocks: '', pages: '',
+    };
 
     if (newMode === 'refresh') {
       state.repositoryValidated = false;
@@ -384,7 +386,9 @@ const app = {
       state.blocksDiscovered = true;
       state.discovering = false;
       state.selectedBlocks = new Set(blocks.map((b) => b.name));
-      state.errors = { github: '', site: '', blocks: '', pages: '' };
+      state.errors = {
+        github: '', site: '', blocks: '', pages: '',
+      };
       this.render();
     } catch (error) {
       state.errors.site = `Unable to load library: ${error.message}. Please run "Library Setup" first to create the library.`;
