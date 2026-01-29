@@ -7,6 +7,7 @@ import {
 import { generateBlockHTML, generateBlocksJSON } from '../utils/doc-generator.js';
 import extractExamplesWithProgress from '../utils/content-extract.js';
 import { analyzeBlock } from '../utils/block-analysis.js';
+import { getContentBlockPath } from '../config.js';
 
 export async function checkLibraryExists(org, site) {
   try {
@@ -60,14 +61,21 @@ export async function extractBlockExamples(blockNames, sitesWithPages, onProgres
   return extractExamplesWithProgress(sitesWithPages, blockNames, onProgress);
 }
 
-export async function generateBlockDocs(blocks, examplesByBlock, api = null) {
+export async function generateBlockDocs(
+  blocks,
+  examplesByBlock,
+  api = null,
+  discoveredBlocks = [],
+) {
   return Promise.all(blocks.map(async (blockName) => {
     const examples = examplesByBlock[blockName] || [];
 
     let analysis = null;
     if (api && examples.length === 0) {
       try {
-        analysis = await analyzeBlock(api, blockName);
+        const blockInfo = discoveredBlocks.find((b) => b.name === blockName);
+        const blockPath = blockInfo?.path || `blocks/${blockName}`;
+        analysis = await analyzeBlock(api, blockName, blockPath);
       } catch (error) {
         // ignore
       }
@@ -123,7 +131,7 @@ export async function updateLibraryBlocksJSON(org, site, blockNames) {
     const existing = existingBlockMap.get(name);
     return {
       name,
-      path: existing?.path || `https://content.da.live/${org}/${site}/library/blocks/${name}`,
+      path: existing?.path || getContentBlockPath(org, site, name),
     };
   });
 
@@ -190,7 +198,16 @@ export async function setupLibrary({
     }
 
     onProgress?.({ step: 'generate', status: 'start', totalBlocks: blocksToProcess.length });
-    const blocksToUpload = await generateBlockDocs(blocksToProcess, examplesByBlock, githubApi);
+    let discoveredBlocks = [];
+    if (githubApi) {
+      discoveredBlocks = await githubApi.discoverBlocks();
+    }
+    const blocksToUpload = await generateBlockDocs(
+      blocksToProcess,
+      examplesByBlock,
+      githubApi,
+      discoveredBlocks,
+    );
     results.steps.push({ name: 'generate', success: true });
     onProgress?.({ step: 'generate', status: 'complete' });
 

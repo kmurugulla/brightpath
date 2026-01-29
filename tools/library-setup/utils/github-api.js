@@ -29,20 +29,42 @@ export default class GitHubAPI {
         { headers: GitHubAPI.getHeaders(this.token) },
       );
 
+      const rateLimit = parseInt(response.headers.get('X-RateLimit-Remaining') || '0', 10);
+      const rateLimitReset = response.headers.get('X-RateLimit-Reset');
+
       if (!response.ok) {
-        if (response.status === 404 || response.status === 403) {
+        if (response.status === 403) {
+          if (rateLimit === 0) {
+            const resetTime = rateLimitReset
+              ? new Date(parseInt(rateLimitReset, 10) * 1000).toLocaleTimeString()
+              : 'soon';
+            return {
+              valid: false,
+              rateLimit: 0,
+              error: 'rate_limit',
+              resetTime,
+              needsToken: !this.token,
+            };
+          }
           return {
             valid: false,
-            rateLimit: 0,
+            rateLimit,
             error: 'private',
             needsToken: !this.token,
+          };
+        }
+        if (response.status === 404) {
+          return {
+            valid: false,
+            rateLimit,
+            error: 'not_found',
+            needsToken: false,
           };
         }
         throw new Error(`GitHub API error: ${response.status}`);
       }
 
       const data = await response.json();
-      const rateLimit = parseInt(response.headers.get('X-RateLimit-Remaining') || '0', 10);
 
       if (data.private && !this.token) {
         return {

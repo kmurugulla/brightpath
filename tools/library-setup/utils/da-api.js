@@ -1,4 +1,5 @@
 import state from '../app/state.js';
+import { LIBRARY_BLOCKS_PATH, CONTENT_DA_LIVE_BASE } from '../config.js';
 
 const DA_ADMIN = 'https://admin.da.live';
 
@@ -38,32 +39,40 @@ export async function fetchSiteConfig(org, site) {
   }
 }
 
-async function previewBlockDoc(org, site, blockName) {
-  const path = `/${org}/${site}/main/library/blocks/${blockName}`;
-  const url = `https://admin.hlx.page/preview${path}`;
-
-  try {
-    const response = await daFetch(url, {
-      method: 'POST',
-    });
-
-    return {
-      success: response.ok,
-      error: response.ok ? null : `Preview failed: ${response.status}`,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: error.message,
-    };
-  }
-}
-
-export async function uploadBlockDoc(org, site, blockName, htmlContent, onProgress) {
+async function checkBlockDocExists(org, site, blockName) {
   const path = `/${org}/${site}/library/blocks/${blockName}`;
   const url = `${DA_ADMIN}/source${path}.html`;
 
   try {
+    const response = await daFetch(url, { method: 'HEAD' });
+    return response.ok;
+  } catch (error) {
+    return false;
+  }
+}
+
+async function createBlockDocVersion(org, site, blockName) {
+  const path = `/${org}/${site}/library/blocks/${blockName}`;
+  const url = `${DA_ADMIN}/versionsource${path}.html`;
+
+  try {
+    const response = await daFetch(url, { method: 'POST' });
+    return response.ok;
+  } catch (error) {
+    return false;
+  }
+}
+
+export async function uploadBlockDoc(org, site, blockName, htmlContent) {
+  const path = `/${org}/${site}/library/blocks/${blockName}`;
+  const url = `${DA_ADMIN}/source${path}.html`;
+
+  try {
+    const exists = await checkBlockDocExists(org, site, blockName);
+    if (exists) {
+      await createBlockDocVersion(org, site, blockName);
+    }
+
     const formData = new FormData();
     const blob = new Blob([htmlContent], { type: 'text/html' });
     formData.set('data', blob);
@@ -77,18 +86,10 @@ export async function uploadBlockDoc(org, site, blockName, htmlContent, onProgre
       throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
     }
 
-    if (onProgress) {
-      onProgress({ status: 'previewing' });
-    }
-
-    const previewResult = await previewBlockDoc(org, site, blockName);
-
     return {
       success: true,
       path,
       error: null,
-      previewSuccess: previewResult.success,
-      previewError: previewResult.error,
     };
   } catch (error) {
     return {
@@ -199,16 +200,6 @@ export async function batchUploadBlocks(org, site, blocks, onProgress, batchSize
         site,
         block.name,
         block.html,
-        (uploadProgress) => {
-          if (onProgress && uploadProgress.status === 'previewing') {
-            onProgress({
-              current: currentIndex + 1,
-              total: blocks.length,
-              blockName: block.name,
-              status: 'previewing',
-            });
-          }
-        },
       );
       processed += 1;
 
@@ -276,7 +267,7 @@ export async function updateSiteConfig(org, site, config) {
 export async function registerLibrary(org, site) {
   try {
     let config = await fetchSiteConfig(org, site);
-    const blocksPath = `https://content.da.live/${org}/${site}/library/blocks.json`;
+    const blocksPath = `${CONTENT_DA_LIVE_BASE}/${org}/${site}/${LIBRARY_BLOCKS_PATH}.json`;
     let wasCreated = false;
 
     if (!config) {

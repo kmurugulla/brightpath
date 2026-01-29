@@ -40,6 +40,7 @@ Use this mode to create a new block library from scratch:
 - Blocks are automatically analyzed for structure, variants, and features
 - Placeholder documentation generated based on block code analysis
 - Optionally select sample pages to extract real content examples
+- Automatically creates version snapshots of existing block docs before overwriting
 - Creates library structure in DA.live with blocks.json configuration
 - Updates site configuration to register the library
 
@@ -53,6 +54,7 @@ Use this mode to update existing block documentation with new content:
 - Enter your DA.live organization and site name
 - Select which blocks to update
 - Add new sample pages to extract fresh content examples
+- Automatically creates version snapshots before updating any block documentation
 - Only updates blocks found in the selected pages
 - Preserves existing blocks not being updated
 - Maintains all library configuration settings

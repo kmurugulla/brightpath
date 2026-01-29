@@ -1,4 +1,5 @@
 import { generateBlockPlaceholder } from './block-analysis.js';
+import { getContentBlockPath } from '../config.js';
 
 export function generateBlockHTML(block, examples = []) {
   const {
@@ -69,7 +70,7 @@ function toDisplayName(name) {
 export function generateBlocksJSON(blocks, org, site) {
   const dataSheet = blocks.map((block) => ({
     name: toDisplayName(block.name),
-    path: block.path || `https://content.da.live/${org}/${site}/library/blocks/${block.name}`,
+    path: block.path || getContentBlockPath(org, site, block.name),
   }));
 
   const optionsSheet = [

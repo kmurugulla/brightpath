@@ -168,7 +168,10 @@ function detectRowColumnStructure(jsContent) {
   };
 }
 
-export async function analyzeBlock(api, blockName) {
+export async function analyzeBlock(api, blockName, blockPath = null) {
+  // Default to standard blocks path if not provided
+  const basePath = blockPath || `blocks/${blockName}`;
+
   const result = {
     blockName,
     description: null,
@@ -188,7 +191,7 @@ export async function analyzeBlock(api, blockName) {
   };
 
   try {
-    const jsContent = await api.fetchFileContents(`blocks/${blockName}/${blockName}.js`);
+    const jsContent = await api.fetchFileContents(`${basePath}/${blockName}.js`);
     if (jsContent) {
       result.hasJS = true;
       result.description = extractDescriptionFromJS(jsContent);
@@ -208,7 +211,7 @@ export async function analyzeBlock(api, blockName) {
   }
 
   try {
-    const cssContent = await api.fetchFileContents(`blocks/${blockName}/${blockName}.css`);
+    const cssContent = await api.fetchFileContents(`${basePath}/${blockName}.css`);
     if (cssContent) {
       result.hasCSS = true;
       result.structure.classes = extractClassesFromCSS(cssContent);

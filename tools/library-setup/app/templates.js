@@ -1,3 +1,8 @@
+import {
+  getLibraryBlocksURL,
+  getBlockEditURL,
+} from '../config.js';
+
 export function appTemplate(content) {
   return `
     <div class="library-setup-container">
@@ -304,7 +309,7 @@ export function initialStatusTemplate({
           </div>
           <div class="import-card-body">
             <p class="import-card-value">${blocksCount}</p>
-            <a href="https://da.live/#/${org}/${repo}/library/blocks" target="_blank" class="import-card-link">
+            <a href="${getLibraryBlocksURL(org, repo)}" target="_blank" class="import-card-link">
               View Blocks →
             </a>
           </div>
@@ -386,7 +391,7 @@ export function processingTemplate({
           </div>
           <div class="import-card-body">
             <p class="import-card-value">${processStatus.blocks.total}</p>
-            <a href="https://da.live/#/${processStatus.github.org}/${processStatus.github.repo}/library/blocks" target="_blank" class="import-card-link">
+            <a href="${getLibraryBlocksURL(processStatus.github.org, processStatus.github.repo)}" target="_blank" class="import-card-link">
               View Blocks →
             </a>
           </div>
@@ -415,19 +420,16 @@ export function processingTemplate({
         </div>
 
         <!-- Errors (Red) -->
-        <div class="import-card import-card-red">
+        <div class="import-card import-card-red ${processStatus.errors.count > 0 ? 'has-errors' : ''}">
           <div class="import-card-header">
             <h3>Errors</h3>
           </div>
           <div class="import-card-body">
             <p class="import-card-value">${processStatus.errors.count}</p>
-            ${processStatus.errors.messages.length > 0 ? `
-              <details class="error-details">
-                <summary>View errors</summary>
-                <ul class="error-list">
-                  ${processStatus.errors.messages.map((err) => `<li><strong>${err.block}:</strong> ${err.message}</li>`).join('')}
-                </ul>
-              </details>
+            ${processStatus.errors.count > 0 ? `
+              <a href="#" class="import-card-link view-errors-link" onclick="event.preventDefault(); document.getElementById('error-modal').style.display='flex'">
+                View errors →
+              </a>
             ` : ''}
           </div>
         </div>
@@ -534,7 +536,7 @@ export function finalStatusTemplate({ processStatus, org, repo }) {
           </div>
           <div class="import-card-body">
             <p class="import-card-value">${processStatus.blocks.total}</p>
-            <a href="https://da.live/#/${org}/${repo}/library/blocks" target="_blank" class="import-card-link">
+            <a href="${getLibraryBlocksURL(org, repo)}" target="_blank" class="import-card-link">
               View Blocks →
             </a>
           </div>
@@ -569,21 +571,28 @@ export function finalStatusTemplate({ processStatus, org, repo }) {
         </div>
 
         <!-- Errors (Red) -->
-        <div class="import-card import-card-red">
+        <div class="import-card import-card-red ${processStatus.errors.count > 0 ? 'has-errors' : ''}">
           <div class="import-card-header">
             <h3>Errors</h3>
           </div>
           <div class="import-card-body">
             <p class="import-card-value">${processStatus.errors.count}</p>
-            ${processStatus.errors.messages.length > 0 ? `
-              <details class="error-details" open>
-                <summary>View errors</summary>
-                <ul class="error-list">
-                  ${processStatus.errors.messages.map((err) => `<li><strong>${err.block}:</strong> ${err.message}</li>`).join('')}
-                </ul>
-              </details>
+            ${processStatus.errors.count > 0 ? `
+              <a href="#" class="import-card-link view-errors-link" onclick="event.preventDefault(); document.getElementById('error-modal').style.display='flex'">
+                View errors →
+              </a>
             ` : ''}
           </div>
+        </div>
+      </div>
+
+      <div class="preview-notice">
+        <div class="preview-notice-content">
+          <h3>Setup Complete!</h3>
+          <p><strong>Next Step:</strong> Please preview block documents to make preview block feature work in Block Library.</p>
+          <a href="${getLibraryBlocksURL(org, repo)}" target="_blank" class="preview-notice-link">
+            Go to Library Blocks →
+          </a>
         </div>
       </div>
     </div>
@@ -610,7 +619,7 @@ export function resultsTemplate({
                 <div class="block-card-content">
                   <h4 class="block-card-name">${r.name}</h4>
                   <a
-                    href="https://da.live/edit#/${processStatus.github.org}/${processStatus.github.repo}/library/blocks/${r.name}"
+                    href="${getBlockEditURL(processStatus.github.org, processStatus.github.repo, r.name)}"
                     target="_blank"
                     class="block-card-link"
                   >
@@ -647,11 +656,22 @@ export function errorModalTemplate(errors) {
   if (!errors || errors.length === 0) return '';
 
   const uploadErrors = errors.filter((e) => e.type === 'upload');
-  const previewErrors = errors.filter((e) => e.type === 'preview');
   const generalErrors = errors.filter((e) => e.type === 'general');
 
+  const formatErrorStatus = (message) => {
+    const match = message.match(/(\d{3})/);
+    return match ? match[1] : 'Error';
+  };
+
+  const formatErrorType = (message) => {
+    if (message.includes('Upload failed')) return 'Upload Failed';
+    if (message.includes('403')) return 'Permission Denied';
+    if (message.includes('404')) return 'Not Found';
+    return 'Error';
+  };
+
   return `
-    <div class="error-modal-overlay" id="error-modal">
+    <div class="error-modal-overlay" id="error-modal" style="display: none;">
       <div class="error-modal">
         <div class="error-modal-header">
           <h2>Processing Errors</h2>
@@ -661,47 +681,46 @@ export function errorModalTemplate(errors) {
           ${generalErrors.length > 0 ? `
             <div class="error-section">
               <h3>General Errors</h3>
-              <ul class="error-modal-list">
-                ${generalErrors.map((e) => `
-                  <li>
-                    <strong>Error:</strong> ${e.message}
-                  </li>
-                `).join('')}
-              </ul>
+              <table class="error-table">
+                <thead>
+                  <tr>
+                    <th>Error</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${generalErrors.map((e) => `
+                    <tr>
+                      <td>${e.message}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
             </div>
           ` : ''}
 
           ${uploadErrors.length > 0 ? `
             <div class="error-section">
               <h3>Upload Errors</h3>
-              <ul class="error-modal-list">
-                ${uploadErrors.map((e) => `
-                  <li>
-                    <strong>Block:</strong> ${e.block}<br>
-                    <strong>Error:</strong> ${e.message}
-                  </li>
-                `).join('')}
-              </ul>
+              <table class="error-table">
+                <thead>
+                  <tr>
+                    <th>Block</th>
+                    <th>Status</th>
+                    <th>Error</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${uploadErrors.map((e) => `
+                    <tr>
+                      <td class="block-name">${e.block}</td>
+                      <td class="status-code">${formatErrorStatus(e.message)}</td>
+                      <td>${formatErrorType(e.message)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
             </div>
           ` : ''}
-
-          ${previewErrors.length > 0 ? `
-            <div class="error-section">
-              <h3>Preview Errors</h3>
-              <p class="error-note">These blocks were uploaded successfully but failed to preview.</p>
-              <ul class="error-modal-list">
-                ${previewErrors.map((e) => `
-                  <li>
-                    <strong>Block:</strong> ${e.block}<br>
-                    <strong>Error:</strong> ${e.message}
-                  </li>
-                `).join('')}
-              </ul>
-            </div>
-          ` : ''}
-        </div>
-        <div class="error-modal-footer">
-          <button class="button primary error-modal-close">Close</button>
         </div>
       </div>
     </div>

@@ -135,6 +135,47 @@ body {
   font-size: var(--s2-font-size-200);
 }
 
+/* Preview Notice */
+.preview-notice {
+  background: var(--s2-blue-100);
+  border-left: 4px solid var(--s2-blue-500);
+  border-radius: var(--s2-radius-100);
+  padding: var(--spacing-400);
+  margin: var(--spacing-500) 0;
+}
+
+.preview-notice-content {
+  font-size: var(--s2-font-size-200);
+  color: var(--s2-gray-900);
+}
+
+.preview-notice-content h3 {
+  margin: 0 0 var(--spacing-200) 0;
+  color: var(--s2-blue-900);
+  font-size: 18px;
+}
+
+.preview-notice-content p {
+  margin: 0 0 var(--spacing-200) 0;
+  line-height: 1.5;
+}
+
+.preview-notice-content strong {
+  color: var(--s2-blue-900);
+}
+
+.preview-notice-link {
+  display: inline-block;
+  margin-top: var(--spacing-100);
+  color: var(--s2-blue-700);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.preview-notice-link:hover {
+  text-decoration: underline;
+}
+
 /* Form Elements */
 .form-row {
   margin-bottom: var(--spacing-500);
@@ -519,12 +560,8 @@ button:disabled {
 .import-card {
   border-radius: 18px;
   padding: var(--spacing-400);
-  border: none;
-  transition: all 0.2s;
-}
-
-.import-card-pending {
   border: 2px dashed rgb(0 0 0 / 20%);
+  transition: all 0.2s;
 }
 
 /* Fixed color scheme - each card has its own color */
@@ -598,6 +635,11 @@ button:disabled {
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: var(--spacing-400);
   margin: var(--spacing-500) 0;
+}
+
+.view-errors-link {
+  color: #991b1b !important;
+  margin-top: var(--spacing-300);
 }
 
 .error-details {
@@ -974,7 +1016,7 @@ button:disabled {
 .error-modal {
   background: white;
   border-radius: 8px;
-  max-width: 600px;
+  max-width: 900px;
   width: 90%;
   max-height: 80vh;
   display: flex;
@@ -1083,4 +1125,52 @@ button:disabled {
 .import-card.errors:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgb(0 0 0 / 10%);
+}
+
+/* Error Table Styles */
+.error-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--spacing-300);
+  font-size: 14px;
+}
+
+.error-table thead {
+  background: var(--s2-gray-50);
+}
+
+.error-table th {
+  text-align: left;
+  padding: var(--spacing-300);
+  font-weight: 600;
+  color: var(--s2-gray-900);
+  border-bottom: 2px solid var(--s2-gray-200);
+}
+
+.error-table td {
+  padding: var(--spacing-300);
+  border-bottom: 1px solid var(--s2-gray-200);
+  color: var(--s2-gray-700);
+}
+
+.error-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.error-table tbody tr:hover {
+  background: var(--s2-gray-50);
+}
+
+.error-table .block-name {
+  font-family: var(--mono-font-family);
+  color: var(--s2-gray-900);
+  font-weight: 500;
+}
+
+.error-table .status-code {
+  font-family: var(--mono-font-family);
+  font-weight: 600;
+  color: #991b1b;
+  text-align: left;
+  width: 80px;
 }

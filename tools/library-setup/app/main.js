@@ -121,7 +121,9 @@ const app = {
     }
 
     const content = sections.join('');
-    const errorModal = templates.errorModalTemplate(state.processStatus.errors.messages);
+    const errorModal = templates.errorModalTemplate(
+      state.processStatus.errors.messages,
+    );
     this.container.innerHTML = templates.appTemplate(content) + errorModal;
     this.attachEventListeners();
   },
@@ -226,12 +228,6 @@ const app = {
       });
     });
 
-    const errorsCard = document.querySelector('.import-card.errors');
-    if (errorsCard && state.processStatus.errors.count > 0) {
-      errorsCard.style.cursor = 'pointer';
-      errorsCard.addEventListener('click', () => this.showErrorModal());
-    }
-
     document.querySelectorAll('.error-modal-close').forEach((btn) => {
       btn.addEventListener('click', () => this.hideErrorModal());
     });
@@ -243,6 +239,12 @@ const app = {
           this.hideErrorModal();
         }
       });
+    }
+
+    const errorsCard = document.querySelector('.import-card.errors');
+    if (errorsCard && state.processStatus.errors.count > 0) {
+      errorsCard.style.cursor = 'pointer';
+      errorsCard.addEventListener('click', () => this.showErrorModal());
     }
   },
 
@@ -312,6 +314,21 @@ const app = {
       const result = await githubOps.validateRepository(state.org, state.repo, state.githubToken);
 
       if (!result.valid) {
+        if (result.error === 'rate_limit') {
+          state.needsToken = true;
+          state.errors.github = `GitHub API rate limit exceeded (resets at ${result.resetTime}). Please add a GitHub token to continue, or wait and try again.`;
+          state.validating = false;
+          this.render();
+          return;
+        }
+
+        if (result.error === 'not_found') {
+          state.errors.github = 'Repository not found. Please check the URL and try again.';
+          state.validating = false;
+          this.render();
+          return;
+        }
+
         if (result.error === 'private' && result.needsToken) {
           state.needsToken = true;
           state.errors.github = 'Unable to access repository. If this is a private repository, please enter a GitHub token below.';
@@ -536,9 +553,7 @@ const app = {
         } else if (progress.status === 'complete') {
           state.processStatus.siteConfig.status = 'complete';
           state.processStatus.siteConfig.message = 'Updated Site Config';
-          state.processStatus.currentStep = progress.registration.created
-            ? 'Created config.json with library sheet'
-            : 'Library already registered in config.json';
+          state.processStatus.currentStep = '';
         }
       }
     } else if (progress.step === 'extract' && progress.status === 'start') {
@@ -556,14 +571,11 @@ const app = {
       } else if (progress.status === 'complete') {
         const uploadSuccessCount = progress.uploadResults.filter((r) => r.success).length;
         const uploadErrorCount = progress.uploadResults.length - uploadSuccessCount;
-        const previewFailures = progress.uploadResults
-          .filter((r) => r.success && !r.previewSuccess);
-        const previewErrorCount = previewFailures.length;
 
         state.processResults = progress.uploadResults;
         state.processStatus.blockDocs.created = uploadSuccessCount;
-        state.processStatus.blockDocs.status = (uploadErrorCount + previewErrorCount) > 0 ? 'warning' : 'complete';
-        state.processStatus.currentStep = `uploaded ${uploadSuccessCount} block documents`;
+        state.processStatus.blockDocs.status = uploadErrorCount > 0 ? 'warning' : 'complete';
+        state.processStatus.currentStep = '';
 
         if (uploadErrorCount > 0) {
           state.processStatus.errors.count += uploadErrorCount;
@@ -573,17 +585,6 @@ const app = {
               type: 'upload',
               block: r.name,
               message: r.error,
-            }));
-        }
-
-        if (previewErrorCount > 0) {
-          state.processStatus.errors.count += previewErrorCount;
-          progress.uploadResults
-            .filter((r) => r.success && !r.previewSuccess)
-            .forEach((r) => state.processStatus.errors.messages.push({
-              type: 'preview',
-              block: r.name,
-              message: r.previewError,
             }));
         }
       }
@@ -600,9 +601,7 @@ const app = {
           state.processStatus.blocksJson.message = state.libraryExists
             ? 'Updated'
             : 'Created';
-          state.processStatus.currentStep = state.libraryExists
-            ? 'Updated blocks.json'
-            : 'Created blocks.json';
+          state.processStatus.currentStep = '';
         }
       }
     }
