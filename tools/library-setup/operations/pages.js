@@ -44,9 +44,7 @@ export async function loadFolderContents(org, site, path) {
       return [];
     }
 
-    const result = items.filter((item) => !item.ext || item.ext === 'html');
-
-    return result;
+    return items;
   } catch (error) {
     return [];
   }

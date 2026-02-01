@@ -1,0 +1,148 @@
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: white;
+  border-radius: var(--s2-radius-200);
+  padding: var(--spacing-600);
+  max-width: 800px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 15%);
+  
+  & h2 {
+    margin-top: 0;
+  }
+}
+
+.page-list {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 2px solid var(--s2-gray-200);
+  border-radius: var(--s2-radius-100);
+  padding: var(--spacing-400);
+  margin: var(--spacing-400) 0;
+}
+
+.tree-view {
+  padding: 0;
+}
+
+.tree-item {
+  margin: 0;
+}
+
+.folder-item {
+  margin-bottom: var(--spacing-200);
+}
+
+.folder-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-200);
+  width: 100%;
+  padding: var(--spacing-200);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--body-font-family);
+  font-size: var(--s2-font-size-200);
+  text-align: left;
+  border-radius: var(--s2-radius-100);
+  transition: background 0.2s;
+  
+  &:hover {
+    background: var(--s2-gray-50);
+  }
+}
+
+.folder-icon {
+  flex-shrink: 0;
+  font-size: 16px;
+}
+
+.folder-name {
+  flex: 1;
+  font-weight: 500;
+}
+
+.toggle-arrow {
+  flex-shrink: 0;
+  font-size: 12px;
+  transition: transform 0.2s;
+}
+
+.folder-contents {
+  margin-left: var(--spacing-300);
+  
+  &.hidden {
+    display: none;
+  }
+}
+
+.folder-loading {
+  padding: var(--spacing-200) var(--spacing-300);
+  color: var(--s2-gray-600);
+  font-size: var(--s2-font-size-100);
+  font-style: italic;
+}
+
+.file-item {
+  margin-bottom: 2px;
+}
+
+.page-checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-200);
+  padding: var(--spacing-200);
+  cursor: pointer;
+  font-size: var(--s2-font-size-200);
+  transition: background 0.2s;
+  border-radius: var(--s2-radius-100);
+  width: 100%;
+  
+  &:hover {
+    background: var(--s2-gray-50);
+  }
+  
+  &.selected {
+    background: var(--s2-blue-200);
+  }
+  
+  & input[type="checkbox"] {
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+}
+
+.page-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+
+  & img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+}
+
+.page-name {
+  flex: 1;
+  font-family: var(--mono-font-family);
+  font-size: 13px;
+}

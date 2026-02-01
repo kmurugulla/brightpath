@@ -3,14 +3,19 @@
 /* eslint-disable import/no-unresolved */
 import DA_SDK from 'https://da.live/nx/utils/sdk.js';
 
-import state from './state.js';
+import state, { resetModeState, clearErrors } from './state.js';
 import * as templates from './templates.js';
 import * as githubOps from '../operations/github.js';
 import * as libraryOps from '../operations/library.js';
-import * as pagesOps from '../operations/pages.js';
 import * as daApi from '../utils/da-api.js';
 import TokenStorage from '../utils/token-storage.js';
 import GitHubAPI from '../utils/github-api.js';
+import loadCSS from '../utils/css-loader.js';
+import * as templatesHandlers from './handlers/templates-handlers.js';
+import * as iconsHandlers from './handlers/icons-handlers.js';
+import * as placeholdersHandlers from './handlers/placeholders-handlers.js';
+import * as pagePickerHandlers from './handlers/page-picker-handlers.js';
+import * as blocksHandlers from './handlers/blocks-handlers.js';
 
 const app = {
   async init() {
@@ -44,6 +49,7 @@ const app = {
     }
 
     this.container = container;
+    await this.loadInitialCSS();
     this.render();
     this.attachEventListeners();
 
@@ -52,14 +58,58 @@ const app = {
     }
   },
 
-  render() {
+  async loadInitialCSS() {
+    await Promise.all([
+      loadCSS('mode-toggle.css'),
+      loadCSS('content-toggles.css'),
+      loadCSS('progress.css'),
+      loadCSS('error-modal.css'),
+    ]);
+  },
+
+  async loadSectionCSS() {
+    const cssToLoad = [];
+
+    if (state.mode === 'setup' && state.selectedContentTypes.has('blocks') && !state.repositoryValidated) {
+      cssToLoad.push(loadCSS('github-section.css'));
+    }
+
+    if (state.blocksDiscovered || state.mode === 'refresh') {
+      cssToLoad.push(loadCSS('blocks-section.css'));
+    }
+
+    if (state.selectedContentTypes.has('templates')
+      || state.selectedContentTypes.has('icons')
+      || state.selectedContentTypes.has('placeholders')) {
+      cssToLoad.push(loadCSS('library-items-section.css'));
+    }
+
+    if (state.selectedBlocks.size > 0
+      || state.selectedTemplates.length > 0
+      || state.selectedIcons.length > 0
+      || state.selectedContentTypes.has('templates')
+      || state.selectedContentTypes.has('icons')) {
+      cssToLoad.push(loadCSS('page-picker.css'));
+    }
+
+    if (cssToLoad.length > 0) {
+      await Promise.all(cssToLoad);
+    }
+  },
+
+  async render() {
+    await this.loadSectionCSS();
     const sections = [];
 
     sections.push(templates.modeToggleTemplate({
       currentMode: state.mode,
     }));
 
-    if (state.mode === 'setup') {
+    sections.push(templates.contentTypeTogglesTemplate({
+      selectedTypes: state.selectedContentTypes,
+    }));
+
+    if (state.mode === 'setup' && state.selectedContentTypes.has('blocks')) {
       sections.push(templates.githubSectionTemplate({
         isValidated: state.repositoryValidated,
         validating: state.validating,
@@ -89,26 +139,70 @@ const app = {
         selectedBlocks: state.selectedBlocks,
         message: state.errors.blocks ? templates.messageTemplate(state.errors.blocks, 'error') : '',
       }));
+
+      if (state.selectedBlocks.size > 0) {
+        sections.push(templates.pagesSelectionTemplate({
+          allSites: this.getAllSites(),
+          pageSelections: state.pageSelections,
+          message: state.errors.pages ? templates.messageTemplate(state.errors.pages, 'error') : '',
+          daToken: state.daToken,
+          org: state.org,
+          mode: state.mode,
+        }));
+      }
     }
 
-    if (state.selectedBlocks.size > 0) {
-      sections.push(templates.pagesSelectionTemplate({
-        allSites: this.getAllSites(),
-        pageSelections: state.pageSelections,
-        message: state.errors.pages ? templates.messageTemplate(state.errors.pages, 'error') : '',
-        daToken: state.daToken,
-        org: state.org,
-        mode: state.mode,
+    if (state.selectedContentTypes.has('templates')) {
+      sections.push(templates.templatesSectionTemplate({
+        templates: state.selectedTemplates,
+        templateForm: state.templateForm,
+        message: state.errors.templates ? templates.messageTemplate(state.errors.templates, 'error') : '',
       }));
     }
 
-    if (state.selectedBlocks.size > 0 && (state.processing || state.processResults.length > 0)) {
+    if (state.selectedContentTypes.has('icons')) {
+      sections.push(templates.iconsSectionTemplate({
+        icons: state.selectedIcons,
+        iconForm: state.iconForm,
+        message: state.errors.icons ? templates.messageTemplate(state.errors.icons, 'error') : '',
+      }));
+    }
+
+    if (state.selectedContentTypes.has('placeholders')) {
+      sections.push(templates.placeholdersSectionTemplate({
+        placeholders: state.selectedPlaceholders,
+        placeholderForm: state.placeholderForm,
+        message: state.errors.placeholders ? templates.messageTemplate(state.errors.placeholders, 'error') : '',
+      }));
+    }
+
+    const allSelectedTypesHaveContent = (
+      (!state.selectedContentTypes.has('blocks') || state.selectedBlocks.size > 0)
+      && (!state.selectedContentTypes.has('templates') || state.selectedTemplates.length > 0)
+      && (!state.selectedContentTypes.has('icons') || state.selectedIcons.length > 0)
+      && (!state.selectedContentTypes.has('placeholders') || state.selectedPlaceholders.length > 0)
+    );
+
+    const hasContent = state.selectedBlocks.size > 0
+      || state.selectedTemplates.length > 0
+      || state.selectedIcons.length > 0
+      || state.selectedPlaceholders.length > 0;
+
+    if (allSelectedTypesHaveContent && hasContent && !state.processStatus?.completed) {
+      sections.push(templates.startButtonTemplate({
+        mode: state.mode,
+        disabled: state.processing,
+        processing: state.processing,
+      }));
+    }
+
+    if (hasContent && (state.processing || state.processStatus?.completed)) {
       sections.push(state.processing
         ? templates.processingTemplate({ processStatus: state.processStatus })
         : templates.finalStatusTemplate({
           processStatus: state.processStatus,
           org: state.org,
-          repo: state.repo,
+          repo: state.repo || state.site,
         }));
     } else if (state.selectedBlocks.size > 0) {
       sections.push(templates.initialStatusTemplate({
@@ -135,6 +229,18 @@ const app = {
         if (newMode !== state.mode) {
           this.handleModeChange(newMode);
         }
+      });
+    });
+
+    document.querySelectorAll('[data-content-type]').forEach((checkbox) => {
+      checkbox.addEventListener('change', (e) => {
+        const { contentType } = e.target.dataset;
+        if (e.target.checked) {
+          state.selectedContentTypes.add(contentType);
+        } else {
+          state.selectedContentTypes.delete(contentType);
+        }
+        this.render();
       });
     });
 
@@ -171,48 +277,15 @@ const app = {
       });
     }
 
-    const loadExistingBlocksBtn = document.getElementById('load-existing-blocks');
-    if (loadExistingBlocksBtn) {
-      loadExistingBlocksBtn.addEventListener('click', () => this.handleLoadExistingBlocks());
-    }
-
-    const validateWithTokenBtn = document.getElementById('validate-with-token');
-    if (validateWithTokenBtn) {
-      validateWithTokenBtn.addEventListener('click', () => this.handleValidateWithToken());
-    }
-
-    const clearTokenBtn = document.getElementById('clear-token');
-    if (clearTokenBtn) {
-      clearTokenBtn.addEventListener('click', () => this.handleClearToken());
-    }
-
     const startBtn = document.getElementById('start-processing');
     if (startBtn) {
       startBtn.addEventListener('click', () => this.handleStartProcessing());
     }
 
-    document.querySelectorAll('[data-block-name]').forEach((checkbox) => {
-      checkbox.addEventListener('change', (e) => {
-        const { target } = e;
-        const { blockName } = target.dataset;
-        if (target.checked) {
-          state.selectedBlocks.add(blockName);
-        } else {
-          state.selectedBlocks.delete(blockName);
-        }
-        this.render();
-      });
-    });
-
-    const toggleAllBtn = document.getElementById('toggle-all-blocks');
-    if (toggleAllBtn) {
-      toggleAllBtn.addEventListener('click', () => this.toggleAllBlocks());
-    }
-
-    const selectNewOnlyBtn = document.getElementById('select-new-only');
-    if (selectNewOnlyBtn) {
-      selectNewOnlyBtn.addEventListener('click', () => this.selectNewBlocksOnly());
-    }
+    blocksHandlers.attachBlocksListeners(this, state);
+    templatesHandlers.attachTemplatesListeners(this, state);
+    iconsHandlers.attachIconsListeners(this, state);
+    placeholdersHandlers.attachPlaceholdersListeners(this, state);
 
     document.querySelectorAll('.select-pages-btn').forEach((btn) => {
       btn.addEventListener('click', (e) => {
@@ -252,23 +325,10 @@ const app = {
     state.mode = newMode;
     state.message = '';
     state.messageType = 'info';
-    state.errors = {
-      github: '', site: '', blocks: '', pages: '',
-    };
+    clearErrors();
 
     if (newMode === 'refresh') {
-      state.repositoryValidated = false;
-      state.blocksDiscovered = false;
-      state.needsToken = false;
-      state.githubUrl = '';
-      state.blocks = [];
-      state.selectedBlocks.clear();
-      state.processing = false;
-      state.processResults = [];
-      state.validating = false;
-      state.discovering = false;
-      state.pageSelections = {};
-
+      resetModeState();
       this.render();
       if (state.org && state.site) {
         await this.handleLoadExistingBlocks();
@@ -277,18 +337,7 @@ const app = {
     }
 
     if (newMode === 'setup') {
-      state.repositoryValidated = false;
-      state.blocksDiscovered = false;
-      state.needsToken = false;
-      state.githubUrl = '';
-      state.blocks = [];
-      state.selectedBlocks.clear();
-      state.processing = false;
-      state.processResults = [];
-      state.validating = false;
-      state.discovering = false;
-      state.pageSelections = {};
-      state.libraryExists = false;
+      resetModeState(true);
     }
 
     this.render();
@@ -481,20 +530,46 @@ const app = {
 
     state.processing = true;
     const baseStatus = {
-      github: { org: state.org, repo: state.repo, status: 'complete' },
-      blocks: { total: state.selectedBlocks.size, status: 'complete' },
-      blockDocs: { created: 0, total: state.selectedBlocks.size, status: 'pending' },
       errors: { count: 0, messages: [] },
-      currentStep: state.mode === 'refresh' ? 'Starting documentation refresh...' : 'Starting library setup...',
+      completed: false,
     };
+
+    if (state.selectedBlocks.size > 0) {
+      baseStatus.github = { org: state.org, repo: state.repo, status: 'complete' };
+      baseStatus.blocks = { total: state.selectedBlocks.size, status: 'complete' };
+      baseStatus.blockDocs = { created: 0, total: state.selectedBlocks.size, status: 'pending' };
+    }
+
+    if (state.selectedTemplates.length > 0) {
+      baseStatus.templates = { processed: 0, total: state.selectedTemplates.length, status: 'pending' };
+    }
+
+    if (state.selectedIcons.length > 0) {
+      baseStatus.icons = { processed: 0, total: state.selectedIcons.length, status: 'pending' };
+    }
+
+    if (state.selectedPlaceholders.length > 0) {
+      baseStatus.placeholders = { processed: 0, total: state.selectedPlaceholders.length, status: 'pending' };
+    }
 
     if (state.mode === 'setup') {
       baseStatus.siteConfig = { status: 'pending', message: '' };
-      baseStatus.blocksJson = { status: 'pending', message: '' };
+
+      if (state.selectedBlocks.size > 0) {
+        baseStatus.blocksJson = { status: 'pending', message: '' };
+      }
+      if (state.selectedTemplates.length > 0) {
+        baseStatus.templatesJson = { status: 'pending', message: '' };
+      }
+      if (state.selectedIcons.length > 0) {
+        baseStatus.iconsJson = { status: 'pending', message: '' };
+      }
+      if (state.selectedPlaceholders.length > 0) {
+        baseStatus.placeholdersJson = { status: 'pending', message: '' };
+      }
     }
 
     state.processStatus = baseStatus;
-    state.processResults = [];
     this.render();
 
     try {
@@ -514,6 +589,9 @@ const app = {
         org: state.org,
         site: state.site,
         blockNames: selectedBlockNames,
+        templates: state.selectedTemplates,
+        icons: state.selectedIcons,
+        placeholders: state.selectedPlaceholders,
         sitesWithPages,
         onProgress: (progress) => this.handleProgress(progress),
         skipSiteConfig: state.mode === 'refresh',
@@ -524,11 +602,10 @@ const app = {
         throw new Error(results.error || 'Library setup failed');
       }
 
-      state.processStatus.currentStep = '';
+      state.processStatus.completed = true;
       state.message = '';
       state.messageType = '';
     } catch (error) {
-      state.processStatus.currentStep = `✗ Error: ${error.message}`;
       state.processStatus.errors.count += 1;
       state.processStatus.errors.messages.push({
         type: 'general',
@@ -549,22 +626,16 @@ const app = {
         if (progress.status === 'start') {
           state.processStatus.siteConfig.status = 'processing';
           state.processStatus.siteConfig.message = 'Registering library...';
-          state.processStatus.currentStep = 'Configuring the Library...';
         } else if (progress.status === 'complete') {
           state.processStatus.siteConfig.status = 'complete';
           state.processStatus.siteConfig.message = 'Updated Site Config';
-          state.processStatus.currentStep = '';
         }
       }
-    } else if (progress.step === 'extract' && progress.status === 'start') {
-      state.processStatus.currentStep = 'Configuring the Library...';
     } else if (progress.step === 'generate' && progress.status === 'start') {
       state.processStatus.blockDocs.status = 'processing';
-      state.processStatus.currentStep = 'Configuring the Library...';
     } else if (progress.step === 'upload') {
       if (progress.status === 'start') {
         state.processStatus.blockDocs.status = 'processing';
-        state.processStatus.currentStep = 'Configuring the Library...';
       } else if (progress.current && progress.total) {
         state.processStatus.blockDocs.created = progress.current;
         state.processStatus.blockDocs.status = 'processing';
@@ -572,10 +643,8 @@ const app = {
         const uploadSuccessCount = progress.uploadResults.filter((r) => r.success).length;
         const uploadErrorCount = progress.uploadResults.length - uploadSuccessCount;
 
-        state.processResults = progress.uploadResults;
         state.processStatus.blockDocs.created = uploadSuccessCount;
         state.processStatus.blockDocs.status = uploadErrorCount > 0 ? 'warning' : 'complete';
-        state.processStatus.currentStep = '';
 
         if (uploadErrorCount > 0) {
           state.processStatus.errors.count += uploadErrorCount;
@@ -595,13 +664,62 @@ const app = {
           state.processStatus.blocksJson.message = state.libraryExists
             ? 'Updating...'
             : 'Creating...';
-          state.processStatus.currentStep = 'Configuring the Library...';
         } else if (progress.status === 'complete') {
           state.processStatus.blocksJson.status = 'complete';
           state.processStatus.blocksJson.message = state.libraryExists
             ? 'Updated'
             : 'Created';
-          state.processStatus.currentStep = '';
+        }
+      }
+    } else if (progress.step === 'templates-json') {
+      if (state.processStatus.templates) {
+        state.processStatus.templates.status = 'processing';
+      }
+      if (state.processStatus.templatesJson) {
+        if (progress.status === 'start') {
+          state.processStatus.templatesJson.status = 'processing';
+          state.processStatus.templatesJson.message = 'Creating...';
+        } else if (progress.status === 'complete') {
+          state.processStatus.templatesJson.status = 'complete';
+          state.processStatus.templatesJson.message = 'Created';
+          if (state.processStatus.templates) {
+            state.processStatus.templates.status = 'complete';
+            state.processStatus.templates.processed = state.selectedTemplates.length;
+          }
+        }
+      }
+    } else if (progress.step === 'icons-json') {
+      if (state.processStatus.icons) {
+        state.processStatus.icons.status = 'processing';
+      }
+      if (state.processStatus.iconsJson) {
+        if (progress.status === 'start') {
+          state.processStatus.iconsJson.status = 'processing';
+          state.processStatus.iconsJson.message = 'Creating...';
+        } else if (progress.status === 'complete') {
+          state.processStatus.iconsJson.status = 'complete';
+          state.processStatus.iconsJson.message = 'Created';
+          if (state.processStatus.icons) {
+            state.processStatus.icons.status = 'complete';
+            state.processStatus.icons.processed = state.selectedIcons.length;
+          }
+        }
+      }
+    } else if (progress.step === 'placeholders-json') {
+      if (state.processStatus.placeholders) {
+        state.processStatus.placeholders.status = 'processing';
+      }
+      if (state.processStatus.placeholdersJson) {
+        if (progress.status === 'start') {
+          state.processStatus.placeholdersJson.status = 'processing';
+          state.processStatus.placeholdersJson.message = 'Creating...';
+        } else if (progress.status === 'complete') {
+          state.processStatus.placeholdersJson.status = 'complete';
+          state.processStatus.placeholdersJson.message = 'Created';
+          if (state.processStatus.placeholders) {
+            state.processStatus.placeholders.status = 'complete';
+            state.processStatus.placeholders.processed = state.selectedPlaceholders.length;
+          }
         }
       }
     }
@@ -610,20 +728,11 @@ const app = {
   },
 
   toggleAllBlocks() {
-    if (state.selectedBlocks.size === state.blocks.length) {
-      state.selectedBlocks.clear();
-    } else {
-      state.blocks.forEach((block) => state.selectedBlocks.add(block.name));
-    }
-    this.render();
+    blocksHandlers.toggleAllBlocks(state, () => this.render());
   },
 
   selectNewBlocksOnly() {
-    state.selectedBlocks.clear();
-    state.blocks
-      .filter((block) => block.isNew)
-      .forEach((block) => state.selectedBlocks.add(block.name));
-    this.render();
+    blocksHandlers.selectNewBlocksOnly(state, () => this.render());
   },
 
   getAllSites() {
@@ -631,219 +740,55 @@ const app = {
   },
 
   async validateSite(org, site, token) {
-    try {
-      const response = await fetch(
-        `https://admin.da.live/list/${org}/${site}/`,
-        {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
-      return response.ok;
-    } catch (error) {
-      return false;
-    }
+    return pagePickerHandlers.validateSite(org, site, token);
   },
 
-  async openPagePicker(site) {
-    if (!state.daToken) {
-      state.errors.pages = 'DA.live authentication required. This tool must be run from within DA.live.';
-      this.render();
-      return;
-    }
-
-    const siteValid = await this.validateSite(state.org, site, state.daToken);
-    if (!siteValid) {
-      state.errors.pages = `Site "${state.org}/${site}" not found in DA.live. Please verify the site name.`;
-      this.render();
-      return;
-    }
-
-    state.currentSite = site;
-    state.loadingPages = true;
-    state.showPagePicker = true;
-    this.renderPagePickerModal();
-
-    try {
-      const pages = await pagesOps.fetchSitePages(state.org, site);
-      state.allPages = pages;
-      state.loadingPages = false;
-      this.renderPagePickerModal();
-    } catch (error) {
-      const errorMsg = error.message.includes('401')
-        ? 'Authentication failed. Please ensure you are logged in to DA.live.'
-        : `Failed to load pages: ${error.message}`;
-
-      state.errors.pages = errorMsg;
-      state.loadingPages = false;
-      state.showPagePicker = false;
-      this.render();
-    }
+  async openPagePicker(site, mode = 'pages') {
+    await pagePickerHandlers.openPagePicker(this, state, site, mode);
   },
 
   renderPagePickerModal() {
-    const modal = templates.pagePickerModalTemplate({
-      site: state.currentSite,
-      items: state.allPages, // Pass items directly
-      selectedPages: state.pageSelections[state.currentSite] || new Set(),
-      loading: state.loadingPages,
-    });
-
-    let modalContainer = document.getElementById('page-picker-modal');
-    if (!modalContainer) {
-      modalContainer = document.createElement('div');
-      modalContainer.id = 'page-picker-modal';
-      document.body.appendChild(modalContainer);
-    }
-
-    modalContainer.innerHTML = modal;
-    this.attachPagePickerListeners();
+    pagePickerHandlers.renderPagePickerModal(this, state);
   },
 
   attachPagePickerListeners() {
-    const overlay = document.querySelector('.modal-overlay');
-    if (overlay) {
-      overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) {
-          this.closePagePicker();
-        }
-      });
-    }
-
-    const cancelBtn = document.querySelector('.modal-cancel');
-    if (cancelBtn) {
-      cancelBtn.addEventListener('click', () => this.closePagePicker());
-    }
-
-    const confirmBtn = document.querySelector('.modal-confirm');
-    if (confirmBtn) {
-      confirmBtn.addEventListener('click', () => this.confirmPageSelection());
-    }
-
-    const searchInput = document.getElementById('page-search');
-    if (searchInput) {
-      searchInput.addEventListener('input', (e) => {
-        state.pageSearchQuery = e.target.value;
-        this.renderPagePickerModal();
-      });
-    }
-
-    document.querySelectorAll('.folder-toggle').forEach((folderBtn) => {
-      folderBtn.addEventListener('click', async (e) => {
-        const button = e.currentTarget;
-        const folderItem = button.closest('.folder-item');
-        const contents = folderItem.querySelector('.folder-contents');
-        const arrow = button.querySelector('.toggle-arrow');
-        const icon = button.querySelector('.folder-icon');
-        const { folderPath } = button.dataset;
-        const isLoaded = contents.dataset.loaded === 'true';
-
-        if (contents.classList.contains('hidden')) {
-          contents.classList.remove('hidden');
-          arrow.textContent = '▼';
-          icon.textContent = '📂';
-
-          if (!isLoaded) {
-            try {
-              const items = await pagesOps.loadFolderContents(
-                state.org,
-                state.currentSite,
-                folderPath,
-              );
-
-              const childHTML = items
-                .sort((a, b) => {
-                  if (!a.ext && b.ext) return -1;
-                  if (a.ext && !b.ext) return 1;
-                  return a.name.localeCompare(b.name);
-                })
-                .map((item) => {
-                  if (item.ext === 'html') {
-                    const siteSelections = state.pageSelections[state.currentSite] || new Set();
-                    const isSelected = siteSelections.has(item.path);
-                    const displayName = item.name.replace('.html', '');
-                    return `
-                      <div class="tree-item file-item" style="padding-left: 20px;">
-                        <label class="page-checkbox ${isSelected ? 'selected' : ''}">
-                          <input type="checkbox" data-path="${item.path}" ${isSelected ? 'checked' : ''}/>
-                          <span class="page-icon">📄</span>
-                          <span class="page-name">${displayName}</span>
-                        </label>
-                      </div>
-                    `;
-                  }
-                  return `
-                    <div class="tree-item folder-item" data-path="${item.path}" style="padding-left: 20px;">
-                      <button class="folder-toggle" data-folder-path="${item.path}">
-                        <span class="folder-icon">📁</span>
-                        <span class="folder-name">${item.name}</span>
-                        <span class="toggle-arrow">▶</span>
-                      </button>
-                      <div class="folder-contents hidden" data-loaded="false">
-                        <div class="folder-loading">Loading...</div>
-                      </div>
-                    </div>
-                  `;
-                })
-                .join('');
-
-              contents.innerHTML = childHTML || '<p style="padding-left: 20px; color: #999;">Empty folder</p>';
-              contents.dataset.loaded = 'true';
-
-              this.attachPagePickerListeners();
-            } catch (error) {
-              contents.innerHTML = '<p style="padding-left: 20px; color: red;">Failed to load</p>';
-            }
-          }
-        } else {
-          contents.classList.add('hidden');
-          arrow.textContent = '▶';
-          icon.textContent = '📁';
-        }
-      });
-    });
-
-    document.querySelectorAll('.page-checkbox input[type="checkbox"]').forEach((checkbox) => {
-      checkbox.addEventListener('change', (e) => {
-        const { path } = e.target.dataset;
-        if (!state.pageSelections[state.currentSite]) {
-          state.pageSelections[state.currentSite] = new Set();
-        }
-
-        if (e.target.checked) {
-          state.pageSelections[state.currentSite].add(path);
-        } else {
-          state.pageSelections[state.currentSite].delete(path);
-        }
-
-        const confirmButton = document.querySelector('.modal-confirm');
-        if (confirmButton) {
-          const count = state.pageSelections[state.currentSite].size;
-          confirmButton.textContent = `Confirm (${count} selected)`;
-        }
-      });
-    });
+    pagePickerHandlers.attachPagePickerListeners(this, state);
   },
 
   closePagePicker() {
-    const modalContainer = document.getElementById('page-picker-modal');
-    if (modalContainer) {
-      modalContainer.remove();
-    }
-    state.showPagePicker = false;
-    state.pageSearchQuery = '';
+    pagePickerHandlers.closePagePicker(state);
   },
 
   confirmPageSelection() {
-    this.closePagePicker();
-    this.render();
+    pagePickerHandlers.confirmPageSelection(this, state);
   },
 
   removePage(site, path) {
-    if (state.pageSelections[site]) {
-      state.pageSelections[site].delete(path);
-    }
-    this.render();
+    pagePickerHandlers.removePage(state, () => this.render(), site, path);
+  },
+
+  handleAddTemplate() {
+    templatesHandlers.handleAddTemplate(state, () => this.render());
+  },
+
+  handleRemoveTemplate(index) {
+    templatesHandlers.handleRemoveTemplate(state, () => this.render(), index);
+  },
+
+  handleAddIcon() {
+    iconsHandlers.handleAddIcon(state, () => this.render());
+  },
+
+  handleRemoveIcon(index) {
+    iconsHandlers.handleRemoveIcon(state, () => this.render(), index);
+  },
+
+  handleAddPlaceholder() {
+    placeholdersHandlers.handleAddPlaceholder(state, () => this.render());
+  },
+
+  handleRemovePlaceholder(index) {
+    placeholdersHandlers.handleRemovePlaceholder(state, () => this.render(), index);
   },
 
   showErrorModal() {

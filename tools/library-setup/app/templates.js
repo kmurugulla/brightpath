@@ -1,6 +1,5 @@
 import {
   getLibraryBlocksURL,
-  getBlockEditURL,
 } from '../config.js';
 
 export function appTemplate(content) {
@@ -39,6 +38,31 @@ export function modeToggleTemplate({ currentMode }) {
         data-mode="refresh">
         Refresh Documentation
       </button>
+    </div>
+  `;
+}
+
+export function contentTypeTogglesTemplate({ selectedTypes }) {
+  const types = [
+    { id: 'blocks', label: 'Blocks' },
+    { id: 'templates', label: 'Templates' },
+    { id: 'icons', label: 'Icons' },
+    { id: 'placeholders', label: 'Placeholders' },
+  ];
+
+  return `
+    <div class="content-type-toggles">
+      <div class="content-type-grid">
+        ${types.map((type) => `
+          <label class="content-type-option ${selectedTypes.has(type.id) ? 'selected' : ''}">
+            <input 
+              type="checkbox" 
+              data-content-type="${type.id}"
+              ${selectedTypes.has(type.id) ? 'checked' : ''}>
+            <span class="content-type-label">${type.label}</span>
+          </label>
+        `).join('')}
+      </div>
     </div>
   `;
 }
@@ -173,7 +197,7 @@ export function blocksListTemplate({
   const newCountText = newCount > 0 ? ` (${newCount} new)` : '';
 
   return `
-    <div class="form-section">
+    <div class="form-section blocks-section">
       <div class="blocks-header">
         <h2>${totalCount === 0 ? 'No Blocks Found' : `Select Blocks <span class="heading-annotation">${selectedCount} of ${totalCount} blocks selected${newCountText}</span>`}</h2>
         ${totalCount > 0 ? `
@@ -221,9 +245,7 @@ export function pagesSelectionTemplate({
   org,
   mode = 'setup',
 }) {
-  const totalSelectedPages = Object.values(pageSelections).reduce((sum, set) => sum + set.size, 0);
   const isRefreshMode = mode === 'refresh';
-  const buttonDisabled = isRefreshMode && totalSelectedPages === 0;
 
   return `
     <div class="form-section">
@@ -269,10 +291,23 @@ export function pagesSelectionTemplate({
         </div>
       `;
   }).join('')}
+    </div>
+  `;
+}
 
+export function startButtonTemplate({ mode, disabled = false, processing = false }) {
+  let buttonText = 'Set Up Library';
+  if (processing) {
+    buttonText = 'Processing...';
+  } else if (mode === 'refresh') {
+    buttonText = 'Refresh Documentation';
+  }
+
+  return `
+    <div class="form-section">
       <div class="button-group">
-        <button id="start-processing" class="accent" ${buttonDisabled ? 'disabled' : ''}>
-          ${isRefreshMode ? 'Refresh Documentation' : 'Set Up Library'}
+        <button id="start-processing" class="accent" ${disabled ? 'disabled' : ''}>
+          ${buttonText}
         </button>
       </div>
     </div>
@@ -366,10 +401,6 @@ export function processingTemplate({
 }) {
   return `
     <div class="form-section">
-      ${processStatus.currentStep ? `
-        <p class="current-step ${processStatus.blockDocs.status === 'processing' ? 'processing' : ''}">${processStatus.currentStep}</p>
-      ` : ''}
-
       <div class="status-cards-grid">
         <!-- GitHub Repository (Blue) -->
         <div class="import-card import-card-blue">
@@ -443,20 +474,42 @@ export function pagePickerModalTemplate({
   items,
   selectedPages,
   loading,
+  mode = 'pages',
 }) {
+  const modalTitles = {
+    icons: 'Select Icons',
+    templates: 'Select Template',
+    pages: 'Select Pages',
+  };
+  const modalTitle = modalTitles[mode] || 'Select Pages';
+
+  const isSingleSelect = mode === 'templates' || mode === 'icons';
+  const inputType = isSingleSelect ? 'radio' : 'checkbox';
+  const inputName = isSingleSelect ? 'selected-item' : '';
+
   const renderItem = (item) => {
-    if (item.ext === 'html') {
+    if (item.ext) {
       const isSelected = selectedPages.has(item.path);
-      const displayName = item.name.replace('.html', '');
+      const displayName = item.name.replace(`.${item.ext}`, '');
+      let icon;
+
+      if (item.ext === 'svg') {
+        const iconUrl = `https://content.da.live${item.path}`;
+        icon = `<img src="${iconUrl}" alt="${displayName}" style="width: 16px; height: 16px; vertical-align: middle;" />`;
+      } else {
+        icon = '📄';
+      }
+
       return `
         <div class="tree-item file-item">
           <label class="page-checkbox ${isSelected ? 'selected' : ''}">
             <input
-              type="checkbox"
+              type="${inputType}"
+              ${inputName ? `name="${inputName}"` : ''}
               data-path="${item.path}"
               ${isSelected ? 'checked' : ''}
             />
-            <span class="page-icon">📄</span>
+            <span class="page-icon">${icon}</span>
             <span class="page-name">${displayName}</span>
           </label>
         </div>
@@ -479,7 +532,7 @@ export function pagePickerModalTemplate({
   return `
     <div class="modal-overlay">
       <div class="modal">
-        <h2>Select Pages from ${site}</h2>
+        <h2>${modalTitle} from ${site}</h2>
 
         ${loading ? `
           <div class="loading">
@@ -516,31 +569,35 @@ export function finalStatusTemplate({ processStatus, org, repo }) {
   return `
     <div class="form-section">
       <div class="status-cards-grid">
-        <!-- GitHub Repository (Blue) -->
-        <div class="import-card import-card-blue">
-          <div class="import-card-header">
-            <h3>GitHub Repository</h3>
+        <!-- GitHub Repository (Blue) - Only shown when blocks processed -->
+        ${processStatus.github ? `
+          <div class="import-card import-card-blue">
+            <div class="import-card-header">
+              <h3>GitHub Repository</h3>
+            </div>
+            <div class="import-card-body">
+              <p class="repo-path">${processStatus.github.org}/${processStatus.github.repo}</p>
+              <a href="https://github.com/${processStatus.github.org}/${processStatus.github.repo}" target="_blank" class="import-card-link">
+                View Repository →
+              </a>
+            </div>
           </div>
-          <div class="import-card-body">
-            <p class="repo-path">${processStatus.github.org}/${processStatus.github.repo}</p>
-            <a href="https://github.com/${processStatus.github.org}/${processStatus.github.repo}" target="_blank" class="import-card-link">
-              View Repository →
-            </a>
-          </div>
-        </div>
+        ` : ''}
 
-        <!-- Blocks Selected (Lime Green) -->
-        <div class="import-card import-card-lime">
-          <div class="import-card-header">
-            <h3>Blocks Selected</h3>
+        <!-- Blocks Selected (Lime Green) - Only shown when blocks processed -->
+        ${processStatus.blocks ? `
+          <div class="import-card import-card-lime">
+            <div class="import-card-header">
+              <h3>Blocks Selected</h3>
+            </div>
+            <div class="import-card-body">
+              <p class="import-card-value">${processStatus.blocks.total}</p>
+              <a href="${getLibraryBlocksURL(org, repo)}" target="_blank" class="import-card-link">
+                View Blocks →
+              </a>
+            </div>
           </div>
-          <div class="import-card-body">
-            <p class="import-card-value">${processStatus.blocks.total}</p>
-            <a href="${getLibraryBlocksURL(org, repo)}" target="_blank" class="import-card-link">
-              View Blocks →
-            </a>
-          </div>
-        </div>
+        ` : ''}
 
         <!-- Site Config (Green) - Only shown in setup mode -->
         ${processStatus.siteConfig ? `
@@ -557,18 +614,65 @@ export function finalStatusTemplate({ processStatus, org, repo }) {
           </div>
         ` : ''}
 
-        <!-- Block Docs (Cyan) -->
-        <div class="import-card import-card-cyan">
-          <div class="import-card-header">
-            <h3>Block Docs</h3>
+        <!-- Block Docs (Cyan) - Only shown when blocks processed -->
+        ${processStatus.blockDocs ? `
+          <div class="import-card import-card-cyan">
+            <div class="import-card-header">
+              <h3>Block Docs</h3>
+            </div>
+            <div class="import-card-body">
+              <p class="import-card-value">${processStatus.blockDocs.created}/${processStatus.blockDocs.total}</p>
+              <a href="https://da.live/#/${org}/${repo}/library" target="_blank" class="import-card-link">
+                View Library →
+              </a>
+            </div>
           </div>
-          <div class="import-card-body">
-            <p class="import-card-value">${processStatus.blockDocs.created}/${processStatus.blockDocs.total}</p>
-            <a href="https://da.live/#/${org}/${repo}/library" target="_blank" class="import-card-link">
-              View Library →
-            </a>
+        ` : ''}
+
+        <!-- Templates JSON -->
+        ${processStatus.templatesJson ? `
+          <div class="import-card import-card-cyan">
+            <div class="import-card-header">
+              <h3>Templates</h3>
+            </div>
+            <div class="import-card-body">
+              <p class="import-card-value">${processStatus.templates?.processed || 0}</p>
+              <a href="https://da.live/#/${org}/${repo}/library/templates/templates.json" target="_blank" class="import-card-link">
+                View Templates JSON →
+              </a>
+            </div>
           </div>
-        </div>
+        ` : ''}
+
+        <!-- Icons JSON -->
+        ${processStatus.iconsJson ? `
+          <div class="import-card import-card-cyan">
+            <div class="import-card-header">
+              <h3>Icons</h3>
+            </div>
+            <div class="import-card-body">
+              <p class="import-card-value">${processStatus.icons?.processed || 0}</p>
+              <a href="https://da.live/#/${org}/${repo}/library/icons/icons.json" target="_blank" class="import-card-link">
+                View Icons JSON →
+              </a>
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- Placeholders JSON -->
+        ${processStatus.placeholdersJson ? `
+          <div class="import-card import-card-cyan">
+            <div class="import-card-header">
+              <h3>Placeholders</h3>
+            </div>
+            <div class="import-card-body">
+              <p class="import-card-value">${processStatus.placeholders?.processed || 0}</p>
+              <a href="https://da.live/#/${org}/${repo}/placeholders.json" target="_blank" class="import-card-link">
+                View Placeholders JSON →
+              </a>
+            </div>
+          </div>
+        ` : ''}
 
         <!-- Errors (Red) -->
         <div class="import-card import-card-red ${processStatus.errors.count > 0 ? 'has-errors' : ''}">
@@ -589,65 +693,19 @@ export function finalStatusTemplate({ processStatus, org, repo }) {
       <div class="preview-notice">
         <div class="preview-notice-content">
           <h3>Setup Complete!</h3>
-          <p><strong>Next Step:</strong> Please preview block documents to make preview block feature work in Block Library.</p>
-          <a href="${getLibraryBlocksURL(org, repo)}" target="_blank" class="preview-notice-link">
-            Go to Library Blocks →
-          </a>
+          ${processStatus.blockDocs ? `
+            <p><strong>Next Step:</strong> Please preview block documents to make preview block feature work in Block Library.</p>
+            <a href="${getLibraryBlocksURL(org, repo)}" target="_blank" class="preview-notice-link">
+              Go to Library Blocks →
+            </a>
+          ` : `
+            <p><strong>Next Step:</strong> Preview the JSON files above to verify the configuration.</p>
+            <a href="https://da.live/#/${org}/${repo}/library" target="_blank" class="preview-notice-link">
+              Go to Library →
+            </a>
+          `}
         </div>
       </div>
-    </div>
-  `;
-}
-
-export function resultsTemplate({
-  processStatus,
-  processResults,
-}) {
-  const successResults = processResults.filter((r) => r.success);
-  const errorResults = processResults.filter((r) => !r.success);
-
-  return `
-    <div class="form-section">
-      <h2>Library Setup Complete</h2>
-
-      ${successResults.length > 0 ? `
-        <div class="results-section">
-          <h3>Successfully Created (${successResults.length})</h3>
-          <div class="block-cards">
-            ${successResults.map((r) => `
-              <div class="block-card success">
-                <div class="block-card-content">
-                  <h4 class="block-card-name">${r.name}</h4>
-                  <a
-                    href="${getBlockEditURL(processStatus.github.org, processStatus.github.repo, r.name)}"
-                    target="_blank"
-                    class="block-card-link"
-                  >
-                    View in DA →
-                  </a>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      ` : ''}
-
-      ${errorResults.length > 0 ? `
-        <div class="results-section">
-          <h3>Errors (${errorResults.length})</h3>
-          <div class="block-cards">
-            ${errorResults.map((r) => `
-              <div class="block-card error">
-                <div class="block-card-icon">✗</div>
-                <div class="block-card-content">
-                  <h4 class="block-card-name">${r.name}</h4>
-                  <p class="block-card-error">${r.error}</p>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      ` : ''}
     </div>
   `;
 }
@@ -723,6 +781,182 @@ export function errorModalTemplate(errors) {
           ` : ''}
         </div>
       </div>
+    </div>
+  `;
+}
+
+export function templatesSectionTemplate({ templates, templateForm, message }) {
+  const displayPath = templateForm.path
+    ? templateForm.path.replace(/^\/[^/]+\/[^/]+/, '').replace(/\.html$/, '')
+    : '';
+
+  return `
+    <div class="form-section templates-section">
+      <h2>Templates</h2>
+      <p class="form-section-subtitle">Add page templates for authors to use</p>
+      
+      ${message}
+      
+      <div class="templates-form">
+        <div class="input-group">
+          <label for="template-name">Template Name</label>
+          <input 
+            type="text" 
+            id="template-name" 
+            value="${templateForm.name}"
+            placeholder="Blog Template">
+        </div>
+        
+        <div class="input-group">
+          <label for="template-path">Source Page</label>
+          <input 
+            type="text" 
+            id="template-path" 
+            value="${displayPath}"
+            placeholder="Select a page..."
+            readonly>
+        </div>
+        
+        <button class="action" id="select-template-page">Select Page</button>
+        
+        <button id="add-template">
+          + Add
+        </button>
+      </div>
+      
+      ${templates.length > 0 ? `
+        <ul class="templates-list">
+          ${templates.map((template, index) => {
+    const itemDisplayPath = template.path.replace(/^\/[^/]+\/[^/]+/, '');
+    return `
+            <li class="template-item">
+              <span class="template-name">${template.name}</span>
+              <span class="template-path">${itemDisplayPath}</span>
+              <button 
+                class="remove-template-btn" 
+                data-index="${index}"
+                aria-label="Remove">
+                &times;
+              </button>
+            </li>
+          `;
+  }).join('')}
+        </ul>
+      ` : ''}
+    </div>
+  `;
+}
+
+export function iconsSectionTemplate({ icons, iconForm, message }) {
+  const displayPath = iconForm.path
+    ? iconForm.path.replace(/^\/[^/]+\/[^/]+/, '').replace(/\.svg$/, '')
+    : '';
+
+  return `
+    <div class="form-section icons-section">
+      <h2>Icons</h2>
+      <p class="form-section-subtitle">Add SVG icons for content authors to use</p>
+      
+      ${message}
+      
+      <div class="icons-form">
+        <div class="input-group">
+          <label for="icon-name">Icon Name</label>
+          <input 
+            type="text" 
+            id="icon-name" 
+            value="${iconForm.name}"
+            placeholder="search">
+        </div>
+        
+        <div class="input-group">
+          <label for="icon-path">Source SVG</label>
+          <input 
+            type="text" 
+            id="icon-path" 
+            value="${displayPath}"
+            placeholder="Select an icon..."
+            readonly>
+        </div>
+        
+        <button class="action" id="select-icon-page">Select Page</button>
+        
+        <button id="add-icon">
+          + Add
+        </button>
+      </div>
+      
+      ${icons.length > 0 ? `
+        <ul class="icons-list">
+          ${icons.map((icon, index) => {
+    const itemDisplayPath = icon.path.replace(/^\/[^/]+\/[^/]+/, '');
+    return `
+            <li class="icon-item">
+              <span class="icon-key">${icon.name}</span>
+              <span class="icon-path">${itemDisplayPath}</span>
+              <button 
+                class="remove-icon-btn" 
+                data-index="${index}"
+                aria-label="Remove">
+                &times;
+              </button>
+            </li>
+          `;
+  }).join('')}
+        </ul>
+      ` : ''}
+    </div>
+  `;
+}
+
+export function placeholdersSectionTemplate({ placeholders, placeholderForm, message }) {
+  return `
+    <div class="form-section placeholders-section">
+      <h2>Placeholders</h2>
+      <p class="form-section-subtitle">Add key-value pairs for reusable content</p>
+      
+      ${message}
+      
+      <div class="placeholders-form">
+        <div class="input-group">
+          <label for="placeholder-key">Key</label>
+          <input 
+            type="text" 
+            id="placeholder-key" 
+            value="${placeholderForm.key}"
+            placeholder="company-name">
+        </div>
+        
+        <div class="input-group">
+          <label for="placeholder-value">Value</label>
+          <input 
+            type="text" 
+            id="placeholder-value" 
+            value="${placeholderForm.value}"
+            placeholder="Acme Corporation">
+        </div>
+        
+        <button id="add-placeholder">
+          + Add
+        </button>
+      </div>
+      
+      ${placeholders.length > 0 ? `
+        <ul class="placeholders-list">
+          ${placeholders.map((placeholder, index) => `
+            <li class="placeholder-item">
+              <span class="placeholder-key">${placeholder.key}</span>
+              <span class="placeholder-value">${placeholder.value}</span>
+              <button 
+                class="remove-placeholder-btn" 
+                data-index="${index}"
+                aria-label="Remove">
+                &times;
+              </button>
+            </li>
+          `).join('')}
+        </ul>
+      ` : ''}
     </div>
   `;
 }
