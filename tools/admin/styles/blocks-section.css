@@ -1,0 +1,132 @@
+.blocks-section {
+  padding-top: var(--spacing-600);
+  border-top: 1px solid var(--s2-gray-200);
+}
+
+.blocks-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-400);
+  
+  & h2 {
+    margin: 0;
+    display: flex;
+    align-items: baseline;
+    gap: var(--spacing-200);
+  }
+}
+
+.blocks-actions {
+  display: flex;
+  gap: var(--spacing-200);
+}
+
+.heading-annotation {
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--s2-gray-600);
+}
+
+.blocks-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--spacing-300);
+}
+
+.block-item {
+  background: var(--s2-gray-50);
+  border: 2px solid var(--s2-gray-200);
+  border-radius: var(--s2-radius-100);
+  padding: var(--spacing-300);
+  transition: all 0.2s;
+  
+  &:hover {
+    border-color: var(--s2-blue-900);
+  }
+  
+  &.selected {
+    background: var(--s2-blue-200);
+    border-color: var(--s2-blue-900);
+  }
+  
+  & label {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-200);
+    cursor: pointer;
+    margin: 0;
+    font-weight: 400;
+  }
+  
+  & input[type="checkbox"] {
+    cursor: pointer;
+  }
+}
+
+.block-name {
+  font-family: var(--mono-font-family);
+  font-size: 13px;
+  flex: 1;
+}
+
+.block-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: var(--s2-radius-100);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  
+  &.new {
+    background: white;
+    color: var(--s2-gray-900);
+    border: 1px solid var(--s2-gray-200);
+  }
+}
+
+.site-section {
+  margin-bottom: var(--spacing-500);
+  margin-top: var(--spacing-600);
+}
+
+.site-selection {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-200);
+}
+
+.selected-pages-list {
+  margin-top: var(--spacing-300);
+}
+
+.selected-page-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--s2-gray-50);
+  padding: var(--spacing-200) var(--spacing-300);
+  border-radius: var(--s2-radius-100);
+  margin-bottom: var(--spacing-200);
+}
+
+.page-path {
+  font-family: var(--mono-font-family);
+  font-size: 13px;
+}
+
+.remove-page-btn {
+  background: transparent;
+  border: none;
+  color: var(--s2-red-600);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  width: 24px;
+  height: 24px;
+}

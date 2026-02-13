@@ -154,6 +154,9 @@ export async function setupLibrary({
   org,
   site,
   blockNames,
+  templates = [],
+  icons = [],
+  placeholders = [],
   sitesWithPages = [],
   onProgress,
   skipSiteConfig = false,
@@ -176,54 +179,120 @@ export async function setupLibrary({
       onProgress?.({ step: 'register', status: 'complete', registration });
     }
 
-    let examplesByBlock = {};
-    const totalPages = sitesWithPages.reduce((sum, s) => sum + s.pages.length, 0);
-    if (totalPages > 0) {
-      onProgress?.({ step: 'extract', status: 'start', totalPages });
-      examplesByBlock = await extractBlockExamples(blockNames, sitesWithPages, onProgress);
-      results.steps.push({ name: 'extract', success: true });
-      onProgress?.({ step: 'extract', status: 'complete' });
+    if (blockNames.length > 0) {
+      let examplesByBlock = {};
+      const totalPages = sitesWithPages.reduce((sum, s) => sum + s.pages.length, 0);
+      if (totalPages > 0) {
+        onProgress?.({ step: 'extract', status: 'start', totalPages });
+        examplesByBlock = await extractBlockExamples(blockNames, sitesWithPages, onProgress);
+        results.steps.push({ name: 'extract', success: true });
+        onProgress?.({ step: 'extract', status: 'complete' });
+      }
+
+      let blocksToProcess = blockNames;
+      if (skipSiteConfig && totalPages > 0) {
+        blocksToProcess = blockNames.filter((name) => {
+          const examples = examplesByBlock[name] || [];
+          return examples.length > 0;
+        });
+
+        if (blocksToProcess.length === 0) {
+          throw new Error('No blocks found in the selected sample pages. Please select pages that contain the blocks you want to update.');
+        }
+      }
+
+      onProgress?.({ step: 'generate', status: 'start', totalBlocks: blocksToProcess.length });
+      let discoveredBlocks = [];
+      if (githubApi) {
+        discoveredBlocks = await githubApi.discoverBlocks();
+      }
+      const blocksToUpload = await generateBlockDocs(
+        blocksToProcess,
+        examplesByBlock,
+        githubApi,
+        discoveredBlocks,
+      );
+      results.steps.push({ name: 'generate', success: true });
+      onProgress?.({ step: 'generate', status: 'complete' });
+
+      onProgress?.({ step: 'upload', status: 'start' });
+      const uploadResults = await uploadBlockDocs(org, site, blocksToUpload, onProgress);
+      results.steps.push({ name: 'upload', success: true, results: uploadResults });
+      onProgress?.({ step: 'upload', status: 'complete', uploadResults });
+
+      if (!skipSiteConfig) {
+        onProgress?.({ step: 'blocks-json', status: 'start' });
+        const blocksJsonResult = await updateLibraryBlocksJSON(org, site, blockNames);
+        if (!blocksJsonResult.success) {
+          throw new Error(`Failed to update blocks.json: ${blocksJsonResult.error}`);
+        }
+        results.steps.push({ name: 'blocks-json', success: true });
+        onProgress?.({ step: 'blocks-json', status: 'complete' });
+      }
     }
 
-    let blocksToProcess = blockNames;
-    if (skipSiteConfig && totalPages > 0) {
-      blocksToProcess = blockNames.filter((name) => {
-        const examples = examplesByBlock[name] || [];
-        return examples.length > 0;
+    if (templates.length > 0) {
+      const { updateLibraryTemplatesJSON } = await import('./templates.js');
+      const { registerTemplatesInConfig } = await import('../utils/da-api.js');
+
+      onProgress?.({ step: 'templates-json', status: 'start' });
+      const templatesJsonResult = await updateLibraryTemplatesJSON(org, site, templates);
+      if (!templatesJsonResult.success) {
+        throw new Error(`Failed to update templates.json: ${templatesJsonResult.error}`);
+      }
+      results.steps.push({ name: 'templates-json', success: true, stats: templatesJsonResult.stats });
+      onProgress?.({ step: 'templates-json', status: 'complete' });
+
+      if (!skipSiteConfig) {
+        const registerResult = await registerTemplatesInConfig(org, site);
+        if (!registerResult.success) {
+          throw new Error(`Failed to register templates in config: ${registerResult.error}`);
+        }
+      }
+    }
+
+    if (icons.length > 0) {
+      const { updateLibraryIconsJSON } = await import('./icons.js');
+      const { registerIconsInConfig } = await import('../utils/da-api.js');
+
+      onProgress?.({ step: 'icons-json', status: 'start' });
+      const iconsJsonResult = await updateLibraryIconsJSON(org, site, icons);
+      if (!iconsJsonResult.success) {
+        throw new Error(`Failed to update icons.json: ${iconsJsonResult.error}`);
+      }
+      results.steps.push({ name: 'icons-json', success: true, stats: iconsJsonResult.stats });
+      onProgress?.({ step: 'icons-json', status: 'complete' });
+
+      if (!skipSiteConfig) {
+        const registerResult = await registerIconsInConfig(org, site);
+        if (!registerResult.success) {
+          throw new Error(`Failed to register icons in config: ${registerResult.error}`);
+        }
+      }
+    }
+
+    if (placeholders.length > 0) {
+      const { updateLibraryPlaceholdersJSON } = await import('./placeholders.js');
+      const { registerPlaceholdersInConfig } = await import('../utils/da-api.js');
+
+      onProgress?.({ step: 'placeholders-json', status: 'start' });
+      const placeholdersJsonResult = await updateLibraryPlaceholdersJSON(org, site, placeholders);
+      if (!placeholdersJsonResult.success) {
+        throw new Error(`Failed to update placeholders.json: ${placeholdersJsonResult.error}`);
+      }
+      results.steps.push({
+        name: 'placeholders-json',
+        success: true,
+        stats: placeholdersJsonResult.stats,
       });
+      onProgress?.({ step: 'placeholders-json', status: 'complete' });
 
-      if (blocksToProcess.length === 0) {
-        throw new Error('No blocks found in the selected sample pages. Please select pages that contain the blocks you want to update.');
+      if (!skipSiteConfig) {
+        const registerResult = await registerPlaceholdersInConfig(org, site);
+        if (!registerResult.success) {
+          throw new Error(`Failed to register placeholders in config: ${registerResult.error}`);
+        }
       }
-    }
-
-    onProgress?.({ step: 'generate', status: 'start', totalBlocks: blocksToProcess.length });
-    let discoveredBlocks = [];
-    if (githubApi) {
-      discoveredBlocks = await githubApi.discoverBlocks();
-    }
-    const blocksToUpload = await generateBlockDocs(
-      blocksToProcess,
-      examplesByBlock,
-      githubApi,
-      discoveredBlocks,
-    );
-    results.steps.push({ name: 'generate', success: true });
-    onProgress?.({ step: 'generate', status: 'complete' });
-
-    onProgress?.({ step: 'upload', status: 'start' });
-    const uploadResults = await uploadBlockDocs(org, site, blocksToUpload, onProgress);
-    results.steps.push({ name: 'upload', success: true, results: uploadResults });
-    onProgress?.({ step: 'upload', status: 'complete', uploadResults });
-
-    if (!skipSiteConfig) {
-      onProgress?.({ step: 'blocks-json', status: 'start' });
-      const blocksJsonResult = await updateLibraryBlocksJSON(org, site, blockNames);
-      if (!blocksJsonResult.success) {
-        throw new Error(`Failed to update blocks.json: ${blocksJsonResult.error}`);
-      }
-      results.steps.push({ name: 'blocks-json', success: true });
-      onProgress?.({ step: 'blocks-json', status: 'complete' });
     }
 
     return results;

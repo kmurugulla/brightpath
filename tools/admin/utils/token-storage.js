@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'library-setup-github-token';
+const STORAGE_KEY = 'siteadmin-github-token';
 
 const TokenStorage = {
   get() {
