@@ -25,7 +25,7 @@
 .heading-annotation {
   font-size: 16px;
   font-weight: 400;
-  color: #676767;
+  color: var(--s2-gray-600);
 }
 
 .blocks-list {
@@ -122,7 +122,7 @@
 .remove-page-btn {
   background: transparent;
   border: none;
-  color: #ef4444;
+  color: var(--s2-red-600);
   font-size: 20px;
   cursor: pointer;
   padding: 0;

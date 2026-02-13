@@ -67,12 +67,12 @@
 
 .import-card-link {
   display: inline-block;
-  color: #1e40af;
+  color: var(--s2-blue-700);
   text-decoration: none;
   font-size: 14px;
   font-weight: 500;
   margin-top: var(--spacing-200);
-  
+
   &:hover {
     text-decoration: underline;
   }
@@ -86,17 +86,17 @@
 }
 
 .view-errors-link {
-  color: #991b1b !important;
+  color: var(--s2-red-700) !important;
   margin-top: var(--spacing-300);
 }
 
 .error-details {
   margin-top: var(--spacing-300);
   font-size: 13px;
-  
+
   & summary {
     cursor: pointer;
-    color: #991b1b;
+    color: var(--s2-red-700);
     font-weight: 600;
   }
 }
@@ -105,10 +105,10 @@
   margin: var(--spacing-200) 0 0;
   padding-left: var(--spacing-400);
   list-style: disc;
-  
+
   & li {
     margin-bottom: var(--spacing-100);
-    color: #991b1b;
+    color: var(--s2-red-700);
   }
 }
 

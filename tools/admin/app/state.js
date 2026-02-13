@@ -15,12 +15,44 @@ const state = {
   discovering: false,
   blocksDiscovered: false,
   libraryExists: false,
+  existingTemplates: [],
   selectedTemplates: [],
   templateForm: { name: '', path: '' },
+  editingTemplateIndex: -1,
+  loadingTemplates: false,
+  templateSearchQuery: '',
+  existingIcons: [],
   selectedIcons: [],
   iconForm: { name: '', path: '' },
+  editingIconIndex: -1,
+  loadingIcons: false,
+  iconSearchQuery: '',
+  existingPlaceholders: [],
   selectedPlaceholders: [],
   placeholderForm: { key: '', value: '' },
+  editingPlaceholderIndex: -1,
+  loadingPlaceholders: false,
+  placeholderSearchQuery: '',
+  aemAssetsConfig: {
+    repositoryId: '',
+    prodOrigin: '',
+    imageType: false,
+    renditionsSelect: false,
+    dmDelivery: false,
+    smartCropSelect: false,
+  },
+  loadingAemConfig: false,
+  validatingAemUrl: false,
+  translationConfig: {
+    translateBehavior: 'overwrite',
+    translateStaging: 'off',
+    rolloutBehavior: 'overwrite',
+  },
+  loadingTranslationConfig: false,
+  universalEditorConfig: {
+    editorPath: '',
+  },
+  loadingUeConfig: false,
   showPagePicker: false,
   pagePickerMode: '',
   currentSite: '',
@@ -61,6 +93,7 @@ const state = {
     icons: '',
     placeholders: '',
     pages: '',
+    aemAssets: '',
   },
 };
 
@@ -85,7 +118,16 @@ export function resetModeState(includeLibraryExists = false) {
 
 export function clearErrors() {
   state.errors = {
-    github: '', site: '', blocks: '', templates: '', icons: '', placeholders: '', pages: '',
+    github: '',
+    site: '',
+    blocks: '',
+    templates: '',
+    icons: '',
+    placeholders: '',
+    pages: '',
+    aemAssets: '',
+    translation: '',
+    universalEditor: '',
   };
 }
 

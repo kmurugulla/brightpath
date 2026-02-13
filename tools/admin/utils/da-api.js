@@ -798,3 +798,345 @@ export async function registerPlaceholdersInConfig(org, site) {
     };
   }
 }
+
+export async function fetchAemAssetsConfig(org, site) {
+  try {
+    const config = await fetchSiteConfig(org, site);
+    if (!config || !config.data || !config.data.data) {
+      return {
+        repositoryId: '',
+        prodOrigin: '',
+        imageType: false,
+        renditionsSelect: false,
+        dmDelivery: false,
+        smartCropSelect: false,
+      };
+    }
+
+    const dataItems = config.data.data;
+    const configMap = new Map(dataItems.map((item) => [item.key, item.value]));
+
+    return {
+      repositoryId: configMap.get('aem.repositoryId') || '',
+      prodOrigin: configMap.get('aem.assets.prod.origin') || '',
+      imageType: configMap.get('aem.assets.image.type') === 'link',
+      renditionsSelect: configMap.get('aem.assets.renditions.select') === 'on',
+      dmDelivery: configMap.get('aem.asset.dm.delivery') === 'on',
+      smartCropSelect: configMap.get('aem.asset.smartcrop.select') === 'on',
+    };
+  } catch (error) {
+    return {
+      repositoryId: '',
+      prodOrigin: '',
+      imageType: false,
+      renditionsSelect: false,
+      dmDelivery: false,
+      smartCropSelect: false,
+    };
+  }
+}
+
+export async function updateAemAssetsConfig(org, site, aemConfig) {
+  try {
+    let config = await fetchSiteConfig(org, site);
+
+    if (!config) {
+      config = {
+        ':version': 3,
+        ':type': 'multi-sheet',
+        ':names': ['data'],
+        data: {
+          total: 0,
+          limit: 0,
+          offset: 0,
+          data: [],
+        },
+      };
+    }
+
+    if (!config.data) {
+      config.data = {
+        total: 0,
+        limit: 0,
+        offset: 0,
+        data: [],
+      };
+    }
+
+    if (!config.data.data) {
+      config.data.data = [];
+    }
+
+    const dataItems = [...config.data.data];
+    const aemKeys = [
+      'aem.repositoryId',
+      'aem.assets.prod.origin',
+      'aem.assets.image.type',
+      'aem.assets.renditions.select',
+      'aem.asset.dm.delivery',
+      'aem.asset.smartcrop.select',
+    ];
+
+    const filteredData = dataItems.filter((item) => !aemKeys.includes(item.key));
+
+    if (aemConfig.repositoryId) {
+      filteredData.push({
+        key: 'aem.repositoryId',
+        value: aemConfig.repositoryId,
+      });
+    }
+
+    if (aemConfig.prodOrigin) {
+      filteredData.push({
+        key: 'aem.assets.prod.origin',
+        value: aemConfig.prodOrigin,
+      });
+    }
+
+    if (aemConfig.imageType) {
+      filteredData.push({
+        key: 'aem.assets.image.type',
+        value: 'link',
+      });
+    }
+
+    if (aemConfig.renditionsSelect) {
+      filteredData.push({
+        key: 'aem.assets.renditions.select',
+        value: 'on',
+      });
+    }
+
+    if (aemConfig.dmDelivery) {
+      filteredData.push({
+        key: 'aem.asset.dm.delivery',
+        value: 'on',
+      });
+    }
+
+    if (aemConfig.smartCropSelect) {
+      filteredData.push({
+        key: 'aem.asset.smartcrop.select',
+        value: 'on',
+      });
+    }
+
+    config.data.data = filteredData;
+    config.data.total = filteredData.length;
+    config.data.limit = filteredData.length;
+
+    if (!config[':names']) {
+      config[':names'] = ['data'];
+    }
+    if (!config[':names'].includes('data')) {
+      config[':names'].push('data');
+    }
+
+    const result = await updateSiteConfig(org, site, config);
+    return {
+      success: result.success,
+      error: result.error,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+}
+
+export async function fetchTranslationConfig(org, site) {
+  try {
+    const config = await fetchSiteConfig(org, site);
+    if (!config || !config.data || !config.data.data) {
+      return {
+        translateBehavior: 'overwrite',
+        translateStaging: 'off',
+        rolloutBehavior: 'overwrite',
+      };
+    }
+
+    const dataItems = config.data.data;
+    const configMap = new Map(dataItems.map((item) => [item.key, item.value]));
+
+    return {
+      translateBehavior: configMap.get('translate.behavior') || 'overwrite',
+      translateStaging: configMap.get('translate.staging') || 'off',
+      rolloutBehavior: configMap.get('rollout.behavior') || 'overwrite',
+    };
+  } catch (error) {
+    return {
+      translateBehavior: 'overwrite',
+      translateStaging: 'off',
+      rolloutBehavior: 'overwrite',
+    };
+  }
+}
+
+export async function updateTranslationConfig(org, site, translationConfig) {
+  try {
+    let config = await fetchSiteConfig(org, site);
+
+    if (!config) {
+      config = {
+        ':version': 3,
+        ':type': 'multi-sheet',
+        ':names': ['data'],
+        data: {
+          total: 0,
+          limit: 0,
+          offset: 0,
+          data: [],
+        },
+      };
+    }
+
+    if (!config.data) {
+      config.data = {
+        total: 0,
+        limit: 0,
+        offset: 0,
+        data: [],
+      };
+    }
+
+    if (!config.data.data) {
+      config.data.data = [];
+    }
+
+    const dataItems = [...config.data.data];
+    const translationKeys = [
+      'translate.behavior',
+      'translate.staging',
+      'rollout.behavior',
+    ];
+
+    const filteredData = dataItems.filter((item) => !translationKeys.includes(item.key));
+
+    filteredData.push({
+      key: 'translate.behavior',
+      value: translationConfig.translateBehavior,
+    });
+
+    filteredData.push({
+      key: 'translate.staging',
+      value: translationConfig.translateStaging,
+    });
+
+    filteredData.push({
+      key: 'rollout.behavior',
+      value: translationConfig.rolloutBehavior,
+    });
+
+    config.data.data = filteredData;
+    config.data.total = filteredData.length;
+    config.data.limit = filteredData.length;
+
+    if (!config[':names']) {
+      config[':names'] = ['data'];
+    }
+    if (!config[':names'].includes('data')) {
+      config[':names'].push('data');
+    }
+
+    const result = await updateSiteConfig(org, site, config);
+    return {
+      success: result.success,
+      error: result.error,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+}
+
+export async function fetchUniversalEditorConfig(org, site) {
+  try {
+    const config = await fetchSiteConfig(org, site);
+    if (!config || !config.data || !config.data.data) {
+      return {
+        editorPath: '',
+      };
+    }
+
+    const dataItems = config.data.data;
+    const configMap = new Map(dataItems.map((item) => [item.key, item.value]));
+
+    return {
+      editorPath: configMap.get('editor.path') || '',
+    };
+  } catch (error) {
+    return {
+      editorPath: '',
+    };
+  }
+}
+
+export async function updateUniversalEditorConfig(org, site, ueConfig) {
+  try {
+    let config = await fetchSiteConfig(org, site);
+
+    if (!config) {
+      config = {
+        ':version': 3,
+        ':type': 'multi-sheet',
+        ':names': ['data'],
+        data: {
+          total: 0,
+          limit: 0,
+          offset: 0,
+          data: [],
+        },
+      };
+    }
+
+    if (!config.data) {
+      config.data = {
+        total: 0,
+        limit: 0,
+        offset: 0,
+        data: [],
+      };
+    }
+
+    if (!config.data.data) {
+      config.data.data = [];
+    }
+
+    const dataItems = [...config.data.data];
+    const ueKeys = ['editor.path'];
+
+    const filteredData = dataItems.filter((item) => !ueKeys.includes(item.key));
+
+    if (ueConfig.editorPath) {
+      filteredData.push({
+        key: 'editor.path',
+        value: ueConfig.editorPath,
+      });
+    }
+
+    config.data.data = filteredData;
+    config.data.total = filteredData.length;
+    config.data.limit = filteredData.length;
+
+    if (!config[':names']) {
+      config[':names'] = ['data'];
+    }
+    if (!config[':names'].includes('data')) {
+      config[':names'].push('data');
+    }
+
+    const result = await updateSiteConfig(org, site, config);
+    return {
+      success: result.success,
+      error: result.error,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+}

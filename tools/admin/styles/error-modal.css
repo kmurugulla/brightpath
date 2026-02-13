@@ -157,7 +157,7 @@
   & .status-code {
     font-family: var(--mono-font-family);
     font-weight: 600;
-    color: #991b1b;
+    color: var(--s2-red-700);
     text-align: left;
     width: 80px;
   }

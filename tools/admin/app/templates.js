@@ -2,14 +2,70 @@ import {
   getLibraryBlocksURL,
 } from '../config.js';
 
+export function navTemplate(currentRoute) {
+  const sections = [
+    {
+      title: 'Library',
+      routes: [
+        { id: 'blocks', label: 'Blocks', enabled: true },
+        { id: 'templates', label: 'Templates', enabled: true },
+        { id: 'icons', label: 'Icons', enabled: true },
+        { id: 'placeholders', label: 'Placeholders', enabled: true },
+      ],
+    },
+    {
+      title: 'Integrations',
+      routes: [
+        { id: 'aem-assets', label: 'AEM Assets', enabled: true },
+        { id: 'translation', label: 'Translation', enabled: true },
+        { id: 'universal-editor', label: 'Universal Editor', enabled: true },
+      ],
+    },
+  ];
+
+  return `
+    <nav class="sidebar">
+      <h1>Site Admin</h1>
+      ${sections.map((section) => `
+        <div class="nav-section">
+          <h2 class="nav-section-title">${section.title}</h2>
+          <ul class="nav-list">
+            ${section.routes.map((route) => `
+              <li class="nav-item">
+                <a 
+                  href="${route.enabled ? `#/${route.id}` : '#'}" 
+                  class="nav-link ${currentRoute === route.id ? 'active' : ''} ${!route.enabled ? 'disabled' : ''}"
+                  ${!route.enabled ? 'onclick="return false;"' : ''}>
+                  ${route.label}
+                </a>
+              </li>
+            `).join('')}
+          </ul>
+        </div>
+      `).join('')}
+    </nav>
+  `;
+}
+
+export function layoutTemplate(currentRoute, content) {
+  return `
+    <div class="app-container">
+      ${navTemplate(currentRoute)}
+      <div class="main-content">
+        ${content}
+      </div>
+    </div>
+  `;
+}
+
 export function appTemplate(content) {
   return `
-    <div class="library-setup-container">
-      <div class="library-setup-header">
-        <h1>Library Setup</h1>
-        <p>Generate block documentation with real content examples</p>
+    <div class="siteadmin-container">
+      <div class="siteadmin-header">
+        <h1>Site Administration</h1>
+        <p>Manage your DA.live site configuration and library</p>
       </div>
-      <div class="library-setup-content">
+      <div class="siteadmin-content">
         ${content}
       </div>
     </div>
@@ -25,6 +81,27 @@ export function messageTemplate(message, type) {
   `;
 }
 
+export function sectionHeaderTemplate({ title, description, docsUrl }) {
+  return `
+    <div class="section-header-info">
+      <div class="section-header-content">
+        <h2 class="section-title">${title}</h2>
+        <p class="section-description">${description}</p>
+      </div>
+      ${docsUrl ? `
+        <a href="${docsUrl}" target="_blank" class="section-docs-link">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M9 2H4C3.46957 2 2.96086 2.21071 2.58579 2.58579C2.21071 2.96086 2 3.46957 2 4V12C2 12.5304 2.21071 13.0391 2.58579 13.4142C2.96086 13.7893 3.46957 14 4 14H12C12.5304 14 13.0391 13.7893 13.4142 13.4142C13.7893 13.0391 14 12.5304 14 12V7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M11 2H14V5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M6.5 9.5L14 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          View Documentation
+        </a>
+      ` : ''}
+    </div>
+  `;
+}
+
 export function modeToggleTemplate({ currentMode }) {
   return `
     <div class="mode-toggle">
@@ -36,7 +113,7 @@ export function modeToggleTemplate({ currentMode }) {
       <button 
         class="mode-btn ${currentMode === 'refresh' ? 'active' : ''}"
         data-mode="refresh">
-        Refresh Documentation
+        Update Examples
       </button>
     </div>
   `;
@@ -300,7 +377,7 @@ export function startButtonTemplate({ mode, disabled = false, processing = false
   if (processing) {
     buttonText = 'Processing...';
   } else if (mode === 'refresh') {
-    buttonText = 'Refresh Documentation';
+    buttonText = 'Update Examples';
   }
 
   return `
@@ -785,177 +862,594 @@ export function errorModalTemplate(errors) {
   `;
 }
 
-export function templatesSectionTemplate({ templates, templateForm, message }) {
+export function templatesSectionTemplate({
+  existingTemplates = [],
+  templates,
+  templateForm,
+  editingIndex = -1,
+  searchQuery = '',
+  loading = false,
+  message,
+}) {
+  const totalCount = existingTemplates.length;
+  const showSearch = totalCount > 5;
   const displayPath = templateForm.path
     ? templateForm.path.replace(/^\/[^/]+\/[^/]+/, '').replace(/\.html$/, '')
     : '';
+  const isEditing = editingIndex >= 0;
+  const buttonLabel = isEditing ? 'Update' : '+ Add';
 
   return `
     <div class="form-section templates-section">
-      <h2>Templates</h2>
-      <p class="form-section-subtitle">Add page templates for authors to use</p>
+      <div class="section-header">
+        <div>
+          <h2>Templates${totalCount > 0 ? ` (${totalCount})` : ''}</h2>
+          <p class="form-section-subtitle">Manage page templates for authors to use</p>
+        </div>
+        ${showSearch ? `
+          <input 
+            type="search" 
+            id="template-search" 
+            class="library-search"
+            value="${searchQuery}"
+            placeholder="Search templates...">
+        ` : ''}
+      </div>
       
       ${message}
       
-      <div class="templates-form">
-        <div class="input-group">
-          <label for="template-name">Template Name</label>
-          <input 
-            type="text" 
-            id="template-name" 
-            value="${templateForm.name}"
-            placeholder="Blog Template">
-        </div>
-        
-        <div class="input-group">
-          <label for="template-path">Source Page</label>
-          <input 
-            type="text" 
-            id="template-path" 
-            value="${displayPath}"
-            placeholder="Select a page..."
-            readonly>
-        </div>
-        
-        <button class="action" id="select-template-page">Select Page</button>
-        
-        <button id="add-template">
-          + Add
-        </button>
-      </div>
+      ${loading ? '<p class="loading-message">Loading templates...</p>' : ''}
       
-      ${templates.length > 0 ? `
-        <ul class="templates-list">
-          ${templates.map((template, index) => {
+      ${!loading && totalCount > 0 ? `
+        <div class="existing-items-list">
+          <h3>Existing Templates</h3>
+          ${existingTemplates.length === 0 ? '<p class="no-results">No templates match your search.</p>' : `
+            <ul class="items-list">
+              ${existingTemplates.map((template, index) => {
+    const itemDisplayPath = template.path.replace(/https:\/\/content\.da\.live\/[^/]+\/[^/]+/, '');
+    return `
+                <li class="item">
+                  <div class="item-content">
+                    <span class="item-name">${template.name}</span>
+                    <span class="item-path">${itemDisplayPath}</span>
+                  </div>
+                  <div class="item-actions">
+                    <button 
+                      class="edit-item-btn" 
+                      data-type="template"
+                      data-index="${index}"
+                      title="Edit">
+                      Edit
+                    </button>
+                    <button 
+                      class="remove-item-btn" 
+                      data-type="template"
+                      data-index="${index}"
+                      title="Remove">
+                      Remove
+                    </button>
+                  </div>
+                </li>
+              `;
+  }).join('')}
+            </ul>
+          `}
+        </div>
+      ` : ''}
+      
+      ${!loading && totalCount === 0 ? '<p class="empty-state">No templates configured yet. Add your first one below.</p>' : ''}
+      
+      <div class="add-new-section">
+        <h3>${isEditing ? 'Edit Template' : 'Add New Template'}</h3>
+        <div class="templates-form">
+          <div class="input-group">
+            <label for="template-name">Template Name</label>
+            <input 
+              type="text" 
+              id="template-name" 
+              value="${templateForm.name}"
+              placeholder="Blog Template">
+          </div>
+          
+          <div class="input-group">
+            <label for="template-path">Source Page</label>
+            <input 
+              type="text" 
+              id="template-path" 
+              value="${displayPath}"
+              placeholder="Select a page..."
+              readonly>
+          </div>
+          
+          <button class="action" id="select-template-page">Select Page</button>
+          
+          <button id="add-template">${buttonLabel}</button>
+          ${isEditing ? '<button id="cancel-edit-template" class="secondary">Cancel</button>' : ''}
+        </div>
+        
+        ${templates.length > 0 ? `
+          <div class="pending-changes">
+            <h4>Pending Changes (${templates.length})</h4>
+            <ul class="templates-list">
+              ${templates.map((template, index) => {
     const itemDisplayPath = template.path.replace(/^\/[^/]+\/[^/]+/, '');
     return `
-            <li class="template-item">
-              <span class="template-name">${template.name}</span>
-              <span class="template-path">${itemDisplayPath}</span>
-              <button 
-                class="remove-template-btn" 
-                data-index="${index}"
-                aria-label="Remove">
-                &times;
-              </button>
-            </li>
-          `;
+                <li class="template-item">
+                  <span class="template-name">${template.name}</span>
+                  <span class="template-path">${itemDisplayPath}</span>
+                  <button 
+                    class="remove-template-btn" 
+                    data-index="${index}"
+                    aria-label="Remove">
+                    &times;
+                  </button>
+                </li>
+              `;
   }).join('')}
-        </ul>
-      ` : ''}
+            </ul>
+          </div>
+        ` : ''}
+      </div>
     </div>
   `;
 }
 
-export function iconsSectionTemplate({ icons, iconForm, message }) {
+export function iconsSectionTemplate({
+  existingIcons = [],
+  icons,
+  iconForm,
+  editingIndex = -1,
+  searchQuery = '',
+  loading = false,
+  message,
+}) {
+  const totalCount = existingIcons.length;
+  const showSearch = totalCount > 5;
   const displayPath = iconForm.path
     ? iconForm.path.replace(/^\/[^/]+\/[^/]+/, '').replace(/\.svg$/, '')
     : '';
+  const isEditing = editingIndex >= 0;
+  const buttonLabel = isEditing ? 'Update' : '+ Add';
 
   return `
     <div class="form-section icons-section">
-      <h2>Icons</h2>
-      <p class="form-section-subtitle">Add SVG icons for content authors to use</p>
+      <div class="section-header">
+        <div>
+          <h2>Icons${totalCount > 0 ? ` (${totalCount})` : ''}</h2>
+          <p class="form-section-subtitle">Manage SVG icons for content authors to use</p>
+        </div>
+        ${showSearch ? `
+          <input 
+            type="search" 
+            id="icon-search" 
+            class="library-search"
+            value="${searchQuery}"
+            placeholder="Search icons...">
+        ` : ''}
+      </div>
       
       ${message}
       
-      <div class="icons-form">
-        <div class="input-group">
-          <label for="icon-name">Icon Name</label>
-          <input 
-            type="text" 
-            id="icon-name" 
-            value="${iconForm.name}"
-            placeholder="search">
-        </div>
-        
-        <div class="input-group">
-          <label for="icon-path">Source SVG</label>
-          <input 
-            type="text" 
-            id="icon-path" 
-            value="${displayPath}"
-            placeholder="Select an icon..."
-            readonly>
-        </div>
-        
-        <button class="action" id="select-icon-page">Select Page</button>
-        
-        <button id="add-icon">
-          + Add
-        </button>
-      </div>
+      ${loading ? '<p class="loading-message">Loading icons...</p>' : ''}
       
-      ${icons.length > 0 ? `
-        <ul class="icons-list">
-          ${icons.map((icon, index) => {
+      ${!loading && totalCount > 0 ? `
+        <div class="existing-items-list">
+          <h3>Existing Icons</h3>
+          ${existingIcons.length === 0 ? '<p class="no-results">No icons match your search.</p>' : `
+            <ul class="items-list">
+              ${existingIcons.map((icon, index) => {
+    const itemDisplayPath = icon.path.replace(/https:\/\/content\.da\.live\/[^/]+\/[^/]+/, '');
+    return `
+                <li class="item">
+                  <div class="item-content">
+                    <span class="item-name">${icon.name}</span>
+                    <span class="item-path">${itemDisplayPath}</span>
+                  </div>
+                  <div class="item-actions">
+                    <button 
+                      class="edit-item-btn" 
+                      data-type="icon"
+                      data-index="${index}"
+                      title="Edit">
+                      Edit
+                    </button>
+                    <button 
+                      class="remove-item-btn" 
+                      data-type="icon"
+                      data-index="${index}"
+                      title="Remove">
+                      Remove
+                    </button>
+                  </div>
+                </li>
+              `;
+  }).join('')}
+            </ul>
+          `}
+        </div>
+      ` : ''}
+      
+      ${!loading && totalCount === 0 ? '<p class="empty-state">No icons configured yet. Add your first one below.</p>' : ''}
+      
+      <div class="add-new-section">
+        <h3>${isEditing ? 'Edit Icon' : 'Add New Icon'}</h3>
+        <div class="icons-form">
+          <div class="input-group">
+            <label for="icon-name">Icon Name</label>
+            <input 
+              type="text" 
+              id="icon-name" 
+              value="${iconForm.name}"
+              placeholder="search">
+          </div>
+          
+          <div class="input-group">
+            <label for="icon-path">Source SVG</label>
+            <input 
+              type="text" 
+              id="icon-path" 
+              value="${displayPath}"
+              placeholder="Select an icon..."
+              readonly>
+          </div>
+          
+          <button class="action" id="select-icon-page">Select Page</button>
+          
+          <button id="add-icon">${buttonLabel}</button>
+          ${isEditing ? '<button id="cancel-edit-icon" class="secondary">Cancel</button>' : ''}
+        </div>
+        
+        ${icons.length > 0 ? `
+          <div class="pending-changes">
+            <h4>Pending Changes (${icons.length})</h4>
+            <ul class="icons-list">
+              ${icons.map((icon, index) => {
     const itemDisplayPath = icon.path.replace(/^\/[^/]+\/[^/]+/, '');
     return `
-            <li class="icon-item">
-              <span class="icon-key">${icon.name}</span>
-              <span class="icon-path">${itemDisplayPath}</span>
-              <button 
-                class="remove-icon-btn" 
-                data-index="${index}"
-                aria-label="Remove">
-                &times;
-              </button>
-            </li>
-          `;
+                <li class="icon-item">
+                  <span class="icon-key">${icon.name}</span>
+                  <span class="icon-path">${itemDisplayPath}</span>
+                  <button 
+                    class="remove-icon-btn" 
+                    data-index="${index}"
+                    aria-label="Remove">
+                    &times;
+                  </button>
+                </li>
+              `;
   }).join('')}
-        </ul>
+            </ul>
+          </div>
+        ` : ''}
+      </div>
+    </div>
+  `;
+}
+
+export function placeholdersSectionTemplate({
+  existingPlaceholders = [],
+  placeholders,
+  placeholderForm,
+  editingIndex = -1,
+  searchQuery = '',
+  loading = false,
+  message,
+}) {
+  const totalCount = existingPlaceholders.length;
+  const showSearch = totalCount > 5;
+  const isEditing = editingIndex >= 0;
+  const buttonLabel = isEditing ? 'Update' : '+ Add';
+
+  return `
+    <div class="form-section placeholders-section">
+      <div class="section-header">
+        <div>
+          <h2>Placeholders${totalCount > 0 ? ` (${totalCount})` : ''}</h2>
+          <p class="form-section-subtitle">Manage key-value pairs for reusable content</p>
+        </div>
+        ${showSearch ? `
+          <input 
+            type="search" 
+            id="placeholder-search" 
+            class="library-search"
+            value="${searchQuery}"
+            placeholder="Search placeholders...">
+        ` : ''}
+      </div>
+      
+      ${message}
+      
+      ${loading ? '<p class="loading-message">Loading placeholders...</p>' : ''}
+      
+      ${!loading && totalCount > 0 ? `
+        <div class="existing-items-list">
+          <h3>Existing Placeholders</h3>
+          ${existingPlaceholders.length === 0 ? '<p class="no-results">No placeholders match your search.</p>' : `
+            <ul class="items-list">
+              ${existingPlaceholders.map((placeholder, index) => `
+                <li class="item">
+                  <div class="item-content">
+                    <span class="item-name">${placeholder.key}</span>
+                    <span class="item-value">${placeholder.value}</span>
+                  </div>
+                  <div class="item-actions">
+                    <button 
+                      class="edit-item-btn" 
+                      data-type="placeholder"
+                      data-index="${index}"
+                      title="Edit">
+                      Edit
+                    </button>
+                    <button 
+                      class="remove-item-btn" 
+                      data-type="placeholder"
+                      data-index="${index}"
+                      title="Remove">
+                      Remove
+                    </button>
+                  </div>
+                </li>
+              `).join('')}
+            </ul>
+          `}
+        </div>
+      ` : ''}
+      
+      ${!loading && totalCount === 0 ? '<p class="empty-state">No placeholders configured yet. Add your first one below.</p>' : ''}
+      
+      <div class="add-new-section">
+        <h3>${isEditing ? 'Edit Placeholder' : 'Add New Placeholder'}</h3>
+        <div class="placeholders-form">
+          <div class="input-group">
+            <label for="placeholder-key">Key</label>
+            <input 
+              type="text" 
+              id="placeholder-key" 
+              value="${placeholderForm.key}"
+              placeholder="company-name">
+          </div>
+          
+          <div class="input-group">
+            <label for="placeholder-value">Value</label>
+            <input 
+              type="text" 
+              id="placeholder-value" 
+              value="${placeholderForm.value}"
+              placeholder="Acme Corporation">
+          </div>
+          
+          <button id="add-placeholder">${buttonLabel}</button>
+          ${isEditing ? '<button id="cancel-edit-placeholder" class="secondary">Cancel</button>' : ''}
+        </div>
+        
+        ${placeholders.length > 0 ? `
+          <div class="pending-changes">
+            <h4>Pending Changes (${placeholders.length})</h4>
+            <ul class="placeholders-list">
+              ${placeholders.map((placeholder, index) => `
+                <li class="placeholder-item">
+                  <span class="placeholder-key">${placeholder.key}</span>
+                  <span class="placeholder-value">${placeholder.value}</span>
+                  <button 
+                    class="remove-placeholder-btn" 
+                    data-index="${index}"
+                    aria-label="Remove">
+                    &times;
+                  </button>
+                </li>
+              `).join('')}
+            </ul>
+          </div>
+        ` : ''}
+      </div>
+    </div>
+  `;
+}
+
+export function aemAssetsSectionTemplate({
+  config,
+  loading = false,
+  validating = false,
+  message,
+}) {
+  return `
+    <div class="form-section aem-assets-section">
+      ${message}
+      
+      ${loading ? '<p class="loading-message">Loading configuration...</p>' : ''}
+      
+      ${!loading ? `
+        <div class="integration-form">
+          <div class="form-field">
+            <label for="aem-repository-id">
+              Repository ID <span class="required">*</span>
+            </label>
+            <input 
+              type="text" 
+              id="aem-repository-id" 
+              value="${config.repositoryId}"
+              placeholder="author-pxxxx-eyyyy.adobeaemcloud.com">
+            <p class="field-help">Use 'author-' or 'delivery-' prefix for your AEM environment</p>
+          </div>
+          
+          <div class="form-field">
+            <label for="aem-prod-origin">Production Origin (Optional)</label>
+            <div class="input-with-button">
+              <input 
+                type="url" 
+                id="aem-prod-origin" 
+                value="${config.prodOrigin}"
+                placeholder="https://mysite.com">
+              <button 
+                id="verify-aem-url" 
+                class="action"
+                ${validating ? 'disabled' : ''}>
+                ${validating ? 'Verifying...' : 'Verify'}
+              </button>
+            </div>
+            <p class="field-help">Custom domain for loading assets</p>
+          </div>
+          
+          <div class="form-field">
+            <h3>Options</h3>
+            <div class="checkbox-group">
+              <div class="checkbox-option">
+                <label class="checkbox-label">
+                  <input 
+                    type="checkbox" 
+                    id="aem-image-type"
+                    ${config.imageType ? 'checked' : ''}>
+                  Insert links instead of copying images
+                </label>
+                <p class="checkbox-help">Reference assets via URL instead of downloading copies</p>
+              </div>
+
+              <div class="checkbox-option">
+                <label class="checkbox-label">
+                  <input 
+                    type="checkbox" 
+                    id="aem-renditions-select"
+                    ${config.renditionsSelect ? 'checked' : ''}>
+                  Allow selecting asset renditions
+                </label>
+                <p class="checkbox-help">Let authors choose specific renditions (sizes) when inserting assets</p>
+              </div>
+
+              <div class="checkbox-option">
+                <label class="checkbox-label">
+                  <input 
+                    type="checkbox" 
+                    id="aem-dm-delivery"
+                    ${config.dmDelivery ? 'checked' : ''}>
+                  Use Dynamic Media delivery
+                </label>
+                <p class="checkbox-help">Enable Dynamic Media for advanced image manipulation and delivery</p>
+              </div>
+
+              <div class="checkbox-option">
+                <label class="checkbox-label">
+                  <input 
+                    type="checkbox" 
+                    id="aem-smartcrop-select"
+                    ${config.smartCropSelect ? 'checked' : ''}>
+                  Enable Smart Crop selection
+                </label>
+                <p class="checkbox-help">Allow authors to use AI-powered smart cropping for images</p>
+              </div>
+            </div>
+          </div>
+          
+          <div class="form-actions">
+            <button id="save-aem-config" class="primary">
+              Save Configuration
+            </button>
+          </div>
+        </div>
       ` : ''}
     </div>
   `;
 }
 
-export function placeholdersSectionTemplate({ placeholders, placeholderForm, message }) {
+export function translationSectionTemplate({
+  config,
+  loading = false,
+  message,
+}) {
   return `
-    <div class="form-section placeholders-section">
-      <h2>Placeholders</h2>
-      <p class="form-section-subtitle">Add key-value pairs for reusable content</p>
-      
+    <div class="form-section translation-section">
       ${message}
-      
-      <div class="placeholders-form">
-        <div class="input-group">
-          <label for="placeholder-key">Key</label>
-          <input 
-            type="text" 
-            id="placeholder-key" 
-            value="${placeholderForm.key}"
-            placeholder="company-name">
+
+      ${loading ? '<p class="loading-message">Loading configuration...</p>' : ''}
+
+      ${!loading ? `
+        <div class="integration-form">
+          <div class="form-field">
+            <label for="translate-behavior">Translation Behavior</label>
+            <select id="translate-behavior" class="config-select">
+              <option value="overwrite" ${config.translateBehavior === 'overwrite' ? 'selected' : ''}>
+                Overwrite - Replace old content (no-touch translation)
+              </option>
+              <option value="merge" ${config.translateBehavior === 'merge' ? 'selected' : ''}>
+                Merge - Combine old and new content (requires review)
+              </option>
+            </select>
+            <p class="field-help">How to handle existing content when translations return</p>
+          </div>
+
+          <div class="form-field">
+            <label for="translate-staging">Translation Staging</label>
+            <select id="translate-staging" class="config-select">
+              <option value="on" ${config.translateStaging === 'on' ? 'selected' : ''}>
+                On - Copy source to separate folder before translation
+              </option>
+              <option value="off" ${config.translateStaging === 'off' ? 'selected' : ''}>
+                Off - Send source documents directly to translation service
+              </option>
+            </select>
+            <p class="field-help">Stage content separately to modify before translation without affecting live content</p>
+          </div>
+
+          <div class="form-field">
+            <label for="rollout-behavior">Rollout Behavior</label>
+            <select id="rollout-behavior" class="config-select">
+              <option value="overwrite" ${config.rolloutBehavior === 'overwrite' ? 'selected' : ''}>
+                Overwrite - Replace old content (no-touch rollout)
+              </option>
+              <option value="merge" ${config.rolloutBehavior === 'merge' ? 'selected' : ''}>
+                Merge - Combine old and new content (requires review)
+              </option>
+            </select>
+            <p class="field-help">How to handle content when rolling out to locales (for hybrid/locale-based strategies)</p>
+          </div>
+
+          <div class="form-actions">
+            <button id="save-translation-config" class="primary">Save Configuration</button>
+          </div>
         </div>
-        
-        <div class="input-group">
-          <label for="placeholder-value">Value</label>
-          <input 
-            type="text" 
-            id="placeholder-value" 
-            value="${placeholderForm.value}"
-            placeholder="Acme Corporation">
+      ` : ''}
+    </div>
+  `;
+}
+
+export function universalEditorSectionTemplate({
+  config,
+  loading = false,
+  message,
+}) {
+  return `
+    <div class="form-section universal-editor-section">
+      ${message}
+
+      ${loading ? '<p class="loading-message">Loading configuration...</p>' : ''}
+
+      ${!loading ? `
+        <div class="integration-form">
+          <div class="form-field">
+            <label for="ue-editor-path">
+              Editor Path <span class="required">*</span>
+            </label>
+            <input
+              type="text"
+              id="ue-editor-path"
+              value="${config.editorPath}"
+              placeholder="/org/site/path=https://experience.adobe.com/#/@your-dx-handle/aem/editor/canvas/...">
+            <p class="field-help">Format: /browsing/path=https://experience.adobe.com/#/@your-dx-handle/aem/editor/canvas/main--site--org.ue.da.live</p>
+          </div>
+
+          <div class="info-box">
+            <h4>Requirements:</h4>
+            <ul>
+              <li>DX Handle (from experience.adobe.com URL)</li>
+              <li>IMS Org with Universal Editor enabled (requires AEM Sites credits)</li>
+              <li>Site on da.live with UE instrumentation (component-models.json, component-definitions.json, component-filters.json)</li>
+              <li>Chrome or Safari browser</li>
+            </ul>
+          </div>
+
+          <div class="form-actions">
+            <button id="save-ue-config" class="primary">Save Configuration</button>
+          </div>
         </div>
-        
-        <button id="add-placeholder">
-          + Add
-        </button>
-      </div>
-      
-      ${placeholders.length > 0 ? `
-        <ul class="placeholders-list">
-          ${placeholders.map((placeholder, index) => `
-            <li class="placeholder-item">
-              <span class="placeholder-key">${placeholder.key}</span>
-              <span class="placeholder-value">${placeholder.value}</span>
-              <button 
-                class="remove-placeholder-btn" 
-                data-index="${index}"
-                aria-label="Remove">
-                &times;
-              </button>
-            </li>
-          `).join('')}
-        </ul>
       ` : ''}
     </div>
   `;

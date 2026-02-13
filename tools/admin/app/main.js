@@ -11,11 +11,14 @@ import * as daApi from '../utils/da-api.js';
 import TokenStorage from '../utils/token-storage.js';
 import GitHubAPI from '../utils/github-api.js';
 import loadCSS from '../utils/css-loader.js';
-import * as templatesHandlers from './handlers/templates-handlers.js';
-import * as iconsHandlers from './handlers/icons-handlers.js';
-import * as placeholdersHandlers from './handlers/placeholders-handlers.js';
+import { templatesHandler, iconsHandler, placeholdersHandler } from './handlers/library-item-handler-factory.js';
 import * as pagePickerHandlers from './handlers/page-picker-handlers.js';
 import * as blocksHandlers from './handlers/blocks-handlers.js';
+import * as aemAssetsHandlers from './handlers/aem-assets-handlers.js';
+import * as translationHandlers from './handlers/translation-handlers.js';
+import * as universalEditorHandlers from './handlers/universal-editor-handlers.js';
+import { initRouter, getCurrentRoute } from './router.js';
+import * as libraryItemsManager from '../operations/library-items-manager.js';
 
 const app = {
   async init() {
@@ -50,7 +53,17 @@ const app = {
 
     this.container = container;
     await this.loadInitialCSS();
-    this.render();
+
+    initRouter({
+      blocks: () => this.renderBlocksView(),
+      templates: () => this.renderTemplatesView(),
+      icons: () => this.renderIconsView(),
+      placeholders: () => this.renderPlaceholdersView(),
+      'aem-assets': () => this.renderAemAssetsView(),
+      translation: () => this.renderTranslationView(),
+      'universal-editor': () => this.renderUniversalEditorView(),
+    });
+
     this.attachEventListeners();
 
     if (state.mode === 'refresh' && state.org && state.site) {
@@ -60,17 +73,16 @@ const app = {
 
   async loadInitialCSS() {
     await Promise.all([
-      loadCSS('mode-toggle.css'),
-      loadCSS('content-toggles.css'),
+      loadCSS('admin.css'),
       loadCSS('progress.css'),
       loadCSS('error-modal.css'),
     ]);
   },
 
-  async loadSectionCSS() {
+  async renderBlocksView() {
     const cssToLoad = [];
 
-    if (state.mode === 'setup' && state.selectedContentTypes.has('blocks') && !state.repositoryValidated) {
+    if (state.mode === 'setup' && !state.repositoryValidated) {
       cssToLoad.push(loadCSS('github-section.css'));
     }
 
@@ -78,38 +90,27 @@ const app = {
       cssToLoad.push(loadCSS('blocks-section.css'));
     }
 
-    if (state.selectedContentTypes.has('templates')
-      || state.selectedContentTypes.has('icons')
-      || state.selectedContentTypes.has('placeholders')) {
-      cssToLoad.push(loadCSS('library-items-section.css'));
-    }
-
-    if (state.selectedBlocks.size > 0
-      || state.selectedTemplates.length > 0
-      || state.selectedIcons.length > 0
-      || state.selectedContentTypes.has('templates')
-      || state.selectedContentTypes.has('icons')) {
+    if (state.selectedBlocks.size > 0) {
       cssToLoad.push(loadCSS('page-picker.css'));
     }
 
     if (cssToLoad.length > 0) {
       await Promise.all(cssToLoad);
     }
-  },
 
-  async render() {
-    await this.loadSectionCSS();
     const sections = [];
+
+    sections.push(templates.sectionHeaderTemplate({
+      title: 'Blocks',
+      description: 'Generate block documentation for your DA.live library from GitHub repositories. Choose between initial setup mode or update existing blocks with new content examples.',
+      docsUrl: 'https://docs.da.live/administrators/guides/setup-library',
+    }));
 
     sections.push(templates.modeToggleTemplate({
       currentMode: state.mode,
     }));
 
-    sections.push(templates.contentTypeTogglesTemplate({
-      selectedTypes: state.selectedContentTypes,
-    }));
-
-    if (state.mode === 'setup' && state.selectedContentTypes.has('blocks')) {
+    if (state.mode === 'setup') {
       sections.push(templates.githubSectionTemplate({
         isValidated: state.repositoryValidated,
         validating: state.validating,
@@ -152,43 +153,9 @@ const app = {
       }
     }
 
-    if (state.selectedContentTypes.has('templates')) {
-      sections.push(templates.templatesSectionTemplate({
-        templates: state.selectedTemplates,
-        templateForm: state.templateForm,
-        message: state.errors.templates ? templates.messageTemplate(state.errors.templates, 'error') : '',
-      }));
-    }
+    const hasContent = state.selectedBlocks.size > 0;
 
-    if (state.selectedContentTypes.has('icons')) {
-      sections.push(templates.iconsSectionTemplate({
-        icons: state.selectedIcons,
-        iconForm: state.iconForm,
-        message: state.errors.icons ? templates.messageTemplate(state.errors.icons, 'error') : '',
-      }));
-    }
-
-    if (state.selectedContentTypes.has('placeholders')) {
-      sections.push(templates.placeholdersSectionTemplate({
-        placeholders: state.selectedPlaceholders,
-        placeholderForm: state.placeholderForm,
-        message: state.errors.placeholders ? templates.messageTemplate(state.errors.placeholders, 'error') : '',
-      }));
-    }
-
-    const allSelectedTypesHaveContent = (
-      (!state.selectedContentTypes.has('blocks') || state.selectedBlocks.size > 0)
-      && (!state.selectedContentTypes.has('templates') || state.selectedTemplates.length > 0)
-      && (!state.selectedContentTypes.has('icons') || state.selectedIcons.length > 0)
-      && (!state.selectedContentTypes.has('placeholders') || state.selectedPlaceholders.length > 0)
-    );
-
-    const hasContent = state.selectedBlocks.size > 0
-      || state.selectedTemplates.length > 0
-      || state.selectedIcons.length > 0
-      || state.selectedPlaceholders.length > 0;
-
-    if (allSelectedTypesHaveContent && hasContent && !state.processStatus?.completed) {
+    if (hasContent && !state.processStatus?.completed) {
       sections.push(templates.startButtonTemplate({
         mode: state.mode,
         disabled: state.processing,
@@ -218,8 +185,243 @@ const app = {
     const errorModal = templates.errorModalTemplate(
       state.processStatus.errors.messages,
     );
-    this.container.innerHTML = templates.appTemplate(content) + errorModal;
+    this.container.innerHTML = templates.layoutTemplate(
+      getCurrentRoute(),
+      content,
+    ) + errorModal;
     this.attachEventListeners();
+  },
+
+  async renderLibraryItemView(itemType, config) {
+    const {
+      title,
+      description,
+      docsUrl,
+      templateFunction,
+    } = config;
+
+    await loadCSS('library-items-section.css');
+    await loadCSS('page-picker.css');
+
+    const capitalizedType = itemType.charAt(0).toUpperCase() + itemType.slice(1);
+    const pluralType = `${itemType}s`;
+    const capitalizedPlural = `${capitalizedType}s`;
+
+    const existingKey = `existing${capitalizedPlural}`;
+    const loadingKey = `loading${capitalizedPlural}`;
+    const searchKey = `${itemType}SearchQuery`;
+    const selectedKey = `selected${capitalizedPlural}`;
+    const formKey = `${itemType}Form`;
+    const editingKey = `editing${capitalizedType}Index`;
+
+    const shouldLoad = state[existingKey].length === 0
+      && !state[loadingKey]
+      && state.org
+      && state.site;
+
+    if (shouldLoad) {
+      state[loadingKey] = true;
+      state[existingKey] = await libraryItemsManager[`fetchExisting${capitalizedPlural}`](
+        state.org,
+        state.site,
+      );
+      state[loadingKey] = false;
+    }
+
+    const filteredExisting = libraryItemsManager.filterItems(
+      state[existingKey],
+      state[searchKey],
+      pluralType,
+    );
+
+    const sections = [];
+
+    sections.push(templates.sectionHeaderTemplate({
+      title,
+      description,
+      docsUrl,
+    }));
+
+    sections.push(templateFunction({
+      [`existing${capitalizedPlural}`]: filteredExisting,
+      [pluralType]: state[selectedKey],
+      [`${itemType}Form`]: state[formKey],
+      editingIndex: state[editingKey],
+      searchQuery: state[searchKey],
+      loading: state[loadingKey],
+      message: state.errors[pluralType] ? templates.messageTemplate(state.errors[pluralType], 'error') : '',
+    }));
+
+    const hasContent = state[selectedKey].length > 0;
+
+    if (hasContent && !state.processStatus?.completed) {
+      sections.push(templates.startButtonTemplate({
+        mode: 'setup',
+        disabled: state.processing,
+        processing: state.processing,
+      }));
+    }
+
+    if (hasContent && (state.processing || state.processStatus?.completed)) {
+      sections.push(state.processing
+        ? templates.processingTemplate({ processStatus: state.processStatus })
+        : templates.finalStatusTemplate({
+          processStatus: state.processStatus,
+          org: state.org,
+          repo: state.repo || state.site,
+        }));
+    }
+
+    const content = sections.join('');
+    const errorModal = templates.errorModalTemplate(
+      state.processStatus.errors.messages,
+    );
+    this.container.innerHTML = templates.layoutTemplate(
+      getCurrentRoute(),
+      content,
+    ) + errorModal;
+    this.attachEventListeners();
+  },
+
+  async renderTemplatesView() {
+    return this.renderLibraryItemView('template', {
+      title: 'Templates',
+      description: 'Create and manage page templates that authors can use to quickly build new pages with pre-configured layouts and content blocks.',
+      docsUrl: 'https://docs.da.live/administrators/guides/setup-library',
+      templateFunction: templates.templatesSectionTemplate,
+    });
+  },
+
+  async renderIconsView() {
+    return this.renderLibraryItemView('icon', {
+      title: 'Icons',
+      description: 'Manage SVG icons that authors can insert into documents. Icons are referenced by name and can be used throughout your site for consistent visual elements.',
+      docsUrl: 'https://docs.da.live/administrators/guides/setup-library',
+      templateFunction: templates.iconsSectionTemplate,
+    });
+  },
+
+  async renderPlaceholdersView() {
+    return this.renderLibraryItemView('placeholder', {
+      title: 'Placeholders',
+      description: 'Define reusable text placeholders (tokens) that authors can insert into documents. Perfect for commonly used text snippets, legal disclaimers, or dynamic content.',
+      docsUrl: 'https://docs.da.live/administrators/guides/setup-library',
+      templateFunction: templates.placeholdersSectionTemplate,
+    });
+  },
+
+  async renderIntegrationView(integrationType, config) {
+    const {
+      title,
+      description,
+      docsUrl,
+      templateFunction,
+      configKey,
+      loadingKey,
+      errorKey,
+      fetchFunction,
+      shouldLoadCheck,
+      additionalProps = {},
+    } = config;
+
+    await loadCSS('integrations.css');
+
+    if (!state[loadingKey] && shouldLoadCheck()) {
+      state[loadingKey] = true;
+      state[configKey] = await fetchFunction(state.org, state.site);
+      state[loadingKey] = false;
+    }
+
+    const sections = [];
+
+    sections.push(templates.sectionHeaderTemplate({
+      title,
+      description,
+      docsUrl,
+    }));
+
+    const messageType = state.errors[errorKey]?.includes('successfully')
+      ? 'success'
+      : 'error';
+
+    sections.push(templateFunction({
+      config: state[configKey],
+      loading: state[loadingKey],
+      message: state.errors[errorKey]
+        ? templates.messageTemplate(state.errors[errorKey], messageType)
+        : '',
+      ...additionalProps,
+    }));
+
+    const content = sections.join('');
+    const errorModal = templates.errorModalTemplate(
+      state.processStatus.errors.messages,
+    );
+    this.container.innerHTML = templates.layoutTemplate(
+      getCurrentRoute(),
+      content,
+    ) + errorModal;
+    this.attachEventListeners();
+  },
+
+  async renderAemAssetsView() {
+    return this.renderIntegrationView('aemAssets', {
+      title: 'AEM Assets Integration',
+      description: 'Connect your AEM as a Cloud Service assets repository to enable authors to browse and insert assets directly from AEM into their documents.',
+      docsUrl: 'https://docs.da.live/administrators/guides/setup-aem-assets',
+      templateFunction: templates.aemAssetsSectionTemplate,
+      configKey: 'aemAssetsConfig',
+      loadingKey: 'loadingAemConfig',
+      errorKey: 'aemAssets',
+      fetchFunction: daApi.fetchAemAssetsConfig,
+      shouldLoadCheck: () => state.org && state.site && state.aemAssetsConfig.repositoryId === '',
+      additionalProps: { validating: state.validatingAemUrl },
+    });
+  },
+
+  async renderTranslationView() {
+    return this.renderIntegrationView('translation', {
+      title: 'Translation Configuration',
+      description: 'Configure how translation services handle your content. Set up staging, behavior for handling existing content, and rollout strategies for localized sites.',
+      docsUrl: 'https://docs.da.live/administrators/guides/setup-translation',
+      templateFunction: templates.translationSectionTemplate,
+      configKey: 'translationConfig',
+      loadingKey: 'loadingTranslationConfig',
+      errorKey: 'translation',
+      fetchFunction: daApi.fetchTranslationConfig,
+      shouldLoadCheck: () => state.org && state.site && state.translationConfig.translateBehavior === 'overwrite',
+    });
+  },
+
+  async renderUniversalEditorView() {
+    return this.renderIntegrationView('universalEditor', {
+      title: 'Universal Editor Setup',
+      description: 'Enable Universal Editor for WYSIWYG content authoring. Configure the editor path to allow authors to edit content directly in a visual interface with real-time preview.',
+      docsUrl: 'https://docs.da.live/administrators/guides/setup-universal-editor',
+      templateFunction: templates.universalEditorSectionTemplate,
+      configKey: 'universalEditorConfig',
+      loadingKey: 'loadingUeConfig',
+      errorKey: 'universalEditor',
+      fetchFunction: daApi.fetchUniversalEditorConfig,
+      shouldLoadCheck: () => state.org && state.site && state.universalEditorConfig.editorPath === '',
+    });
+  },
+
+  async render() {
+    const route = getCurrentRoute();
+    const viewMap = {
+      blocks: () => this.renderBlocksView(),
+      templates: () => this.renderTemplatesView(),
+      icons: () => this.renderIconsView(),
+      placeholders: () => this.renderPlaceholdersView(),
+      'aem-assets': () => this.renderAemAssetsView(),
+      translation: () => this.renderTranslationView(),
+      'universal-editor': () => this.renderUniversalEditorView(),
+    };
+
+    if (viewMap[route]) {
+      await viewMap[route]();
+    }
   },
 
   attachEventListeners() {
@@ -229,18 +431,6 @@ const app = {
         if (newMode !== state.mode) {
           this.handleModeChange(newMode);
         }
-      });
-    });
-
-    document.querySelectorAll('[data-content-type]').forEach((checkbox) => {
-      checkbox.addEventListener('change', (e) => {
-        const { contentType } = e.target.dataset;
-        if (e.target.checked) {
-          state.selectedContentTypes.add(contentType);
-        } else {
-          state.selectedContentTypes.delete(contentType);
-        }
-        this.render();
       });
     });
 
@@ -283,9 +473,12 @@ const app = {
     }
 
     blocksHandlers.attachBlocksListeners(this, state);
-    templatesHandlers.attachTemplatesListeners(this, state);
-    iconsHandlers.attachIconsListeners(this, state);
-    placeholdersHandlers.attachPlaceholdersListeners(this, state);
+    templatesHandler.attachListeners(this, state);
+    iconsHandler.attachListeners(this, state);
+    placeholdersHandler.attachListeners(this, state);
+    aemAssetsHandlers.attachAemAssetsListeners(this, state);
+    translationHandlers.attachTranslationListeners(this, state);
+    universalEditorHandlers.attachUniversalEditorListeners(this, state);
 
     document.querySelectorAll('.select-pages-btn').forEach((btn) => {
       btn.addEventListener('click', (e) => {
@@ -768,27 +961,79 @@ const app = {
   },
 
   handleAddTemplate() {
-    templatesHandlers.handleAddTemplate(state, () => this.render());
+    templatesHandler.handleAdd(state, () => this.render());
   },
 
   handleRemoveTemplate(index) {
-    templatesHandlers.handleRemoveTemplate(state, () => this.render(), index);
+    templatesHandler.handleRemove(state, () => this.render(), index);
+  },
+
+  handleEditExistingTemplate(index) {
+    templatesHandler.handleEditExisting(state, () => this.render(), index);
+  },
+
+  handleRemoveExistingTemplate(index) {
+    templatesHandler.handleRemoveExisting(state, () => this.render(), index);
+  },
+
+  handleCancelEditTemplate() {
+    templatesHandler.handleCancelEdit(state, () => this.render());
   },
 
   handleAddIcon() {
-    iconsHandlers.handleAddIcon(state, () => this.render());
+    iconsHandler.handleAdd(state, () => this.render());
   },
 
   handleRemoveIcon(index) {
-    iconsHandlers.handleRemoveIcon(state, () => this.render(), index);
+    iconsHandler.handleRemove(state, () => this.render(), index);
+  },
+
+  handleEditExistingIcon(index) {
+    iconsHandler.handleEditExisting(state, () => this.render(), index);
+  },
+
+  handleRemoveExistingIcon(index) {
+    iconsHandler.handleRemoveExisting(state, () => this.render(), index);
+  },
+
+  handleCancelEditIcon() {
+    iconsHandler.handleCancelEdit(state, () => this.render());
   },
 
   handleAddPlaceholder() {
-    placeholdersHandlers.handleAddPlaceholder(state, () => this.render());
+    placeholdersHandler.handleAdd(state, () => this.render());
   },
 
   handleRemovePlaceholder(index) {
-    placeholdersHandlers.handleRemovePlaceholder(state, () => this.render(), index);
+    placeholdersHandler.handleRemove(state, () => this.render(), index);
+  },
+
+  handleEditExistingPlaceholder(index) {
+    placeholdersHandler.handleEditExisting(state, () => this.render(), index);
+  },
+
+  handleRemoveExistingPlaceholder(index) {
+    placeholdersHandler.handleRemoveExisting(state, () => this.render(), index);
+  },
+
+  handleCancelEditPlaceholder() {
+    placeholdersHandler.handleCancelEdit(state, () => this.render());
+  },
+
+  handleSaveAemConfig() {
+    aemAssetsHandlers.handleSaveAemConfig(state, () => this.render(), daApi);
+  },
+
+  handleVerifyAemUrl() {
+    aemAssetsHandlers.handleVerifyAemUrl(state, () => this.render());
+  },
+
+  handleSaveTranslationConfig() {
+    translationHandlers.handleSaveTranslationConfig(state, () => this.render(), daApi);
+  },
+
+  handleSaveUeConfig() {
+    universalEditorHandlers.handleSaveUeConfig(state, () => this.render(), daApi);
   },
 
   showErrorModal() {
