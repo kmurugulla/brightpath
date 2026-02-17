@@ -1,16 +1,19 @@
+// sessionStorage keeps the token for the current browser session only.
+// Unlike localStorage it is cleared when the tab/window closes, limiting
+// exposure if the machine is shared or compromised.
 const STORAGE_KEY = 'siteadmin-github-token';
 
 const TokenStorage = {
   get() {
-    return localStorage.getItem(STORAGE_KEY);
+    return sessionStorage.getItem(STORAGE_KEY);
   },
 
   set(token) {
-    localStorage.setItem(STORAGE_KEY, token);
+    sessionStorage.setItem(STORAGE_KEY, token);
   },
 
   clear() {
-    localStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(STORAGE_KEY);
   },
 
   exists() {

@@ -15,6 +15,7 @@ const state = {
   discovering: false,
   blocksDiscovered: false,
   libraryExists: false,
+  blocksDefaultModeSet: false,
   existingTemplates: [],
   selectedTemplates: [],
   templateForm: { name: '', path: '' },
@@ -40,9 +41,11 @@ const state = {
     renditionsSelect: false,
     dmDelivery: false,
     smartCropSelect: false,
+    repositoryIdValidation: null,
+    prodOriginValidation: null,
+    exists: false,
   },
   loadingAemConfig: false,
-  validatingAemUrl: false,
   translationConfig: {
     translateBehavior: 'overwrite',
     translateStaging: 'off',
@@ -101,6 +104,7 @@ export function resetModeState(includeLibraryExists = false) {
   Object.assign(state, {
     repositoryValidated: false,
     blocksDiscovered: false,
+    blocksDefaultModeSet: false,
     needsToken: false,
     githubUrl: '',
     blocks: [],

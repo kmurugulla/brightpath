@@ -39,14 +39,14 @@ export function createLibraryItemHandler(itemType, config) {
 
       document.querySelectorAll(`.edit-item-btn[data-type="${itemType}"]`).forEach((btn) => {
         btn.addEventListener('click', (e) => {
-          const index = parseInt(e.target.dataset.index, 10);
+          const index = parseInt(e.currentTarget.dataset.index, 10);
           app[`handleEditExisting${capitalizedType}`](index);
         });
       });
 
       document.querySelectorAll(`.remove-item-btn[data-type="${itemType}"]`).forEach((btn) => {
         btn.addEventListener('click', (e) => {
-          const index = parseInt(e.target.dataset.index, 10);
+          const index = parseInt(e.currentTarget.dataset.index, 10);
           app[`handleRemoveExisting${capitalizedType}`](index);
         });
       });
@@ -117,7 +117,7 @@ export function createLibraryItemHandler(itemType, config) {
 
       document.querySelectorAll(`.remove-${itemType}-btn`).forEach((btn) => {
         btn.addEventListener('click', (e) => {
-          const index = parseInt(e.target.dataset.index, 10);
+          const index = parseInt(e.currentTarget.dataset.index, 10);
           app[`handleRemove${capitalizedType}`](index);
         });
       });

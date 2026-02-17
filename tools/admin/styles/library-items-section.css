@@ -377,9 +377,16 @@
   border-radius: var(--s2-radius-200);
 
   & h4 {
-    margin: 0 0 var(--spacing-300);
+    margin: 0 0 var(--spacing-200);
     font-size: 14px;
     color: var(--s2-yellow-900);
+  }
+
+  & .pending-changes-hint {
+    margin: 0 0 var(--spacing-300);
+    font-size: 13px;
+    color: var(--s2-yellow-900);
+    opacity: 0.9;
   }
 }
 

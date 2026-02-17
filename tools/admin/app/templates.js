@@ -1,6 +1,7 @@
 import {
   getLibraryBlocksURL,
 } from '../config.js';
+import escapeHtml from '../utils/escape.js';
 
 export function navTemplate(currentRoute) {
   const sections = [
@@ -77,6 +78,23 @@ export function messageTemplate(message, type) {
   return `
     <div class="status-banner ${type}">
       <span>${message}</span>
+    </div>
+  `;
+}
+
+export function confirmModalTemplate({
+  title, message, confirmLabel = 'Remove', cancelLabel = 'Cancel',
+}) {
+  return `
+    <div class="modal-overlay" data-confirm-overlay>
+      <div class="modal confirm-modal">
+        <h2>${title}</h2>
+        <p class="confirm-modal-message">${message}</p>
+        <div class="modal-actions">
+          <button type="button" class="modal-cancel">${cancelLabel}</button>
+          <button type="button" class="modal-confirm confirm-modal-primary">${confirmLabel}</button>
+        </div>
+      </div>
     </div>
   `;
 }
@@ -159,7 +177,7 @@ export function githubSectionTemplate({
           type="url"
           id="github-url"
           placeholder="https://github.com/{owner}/{repo}"
-          value="${githubUrl}"
+          value="${escapeHtml(githubUrl)}"
           ${isValidated ? 'readonly' : ''}
         />
       </div>
@@ -242,7 +260,7 @@ export function siteSectionTemplate({
           <label>Organization</label>
           <input
             type="text"
-            value="${org}"
+            value="${escapeHtml(org)}"
             readonly
             class="readonly-input"
           />
@@ -252,7 +270,7 @@ export function siteSectionTemplate({
           <input
             type="text"
             ${isRefreshMode ? '' : 'id="site-name"'}
-            value="${site}"
+            value="${escapeHtml(site)}"
             ${isRefreshMode ? 'readonly class="readonly-input"' : 'placeholder="site-name"'}
           />
         </div>
@@ -300,10 +318,10 @@ export function blocksListTemplate({
             <label>
               <input
                 type="checkbox"
-                data-block-name="${block.name}"
+                data-block-name="${escapeHtml(block.name)}"
                 ${selectedBlocks.has(block.name) ? 'checked' : ''}
               />
-              <span class="block-name">${block.name}</span>
+              <span class="block-name">${escapeHtml(block.name)}</span>
               ${block.isNew ? '<span class="block-badge new">New</span>' : ''}
             </label>
           </li>
@@ -346,10 +364,10 @@ export function pagesSelectionTemplate({
     return `
         <div class="site-section">
           <div class="site-selection">
-            <button class="select-pages-btn" data-site="${site}">
+            <button class="select-pages-btn" data-site="${escapeHtml(site)}">
               Select (${(pageSelections[site] || new Set()).size})
             </button>
-            <span class="site-label">from <strong>${site}</strong></span>
+            <span class="site-label">from <strong>${escapeHtml(site)}</strong></span>
           </div>
 
           ${(pageSelections[site] || new Set()).size > 0 ? `
@@ -358,8 +376,8 @@ export function pagesSelectionTemplate({
     const displayPath = path.replace(basePath, '') || '/';
     return `
                 <div class="selected-page-item">
-                  <span class="page-path">${displayPath}</span>
-                  <button class="remove-page-btn" data-site="${site}" data-path="${path}">×</button>
+                  <span class="page-path">${escapeHtml(displayPath)}</span>
+                  <button class="remove-page-btn" data-site="${escapeHtml(site)}" data-path="${escapeHtml(path)}">×</button>
                 </div>
               `;
   }).join('')}
@@ -407,8 +425,8 @@ export function initialStatusTemplate({
             <h3>GitHub Repository</h3>
           </div>
           <div class="import-card-body">
-            <p class="repo-path">${org}/${repo}</p>
-            <a href="https://github.com/${org}/${repo}" target="_blank" class="import-card-link">
+            <p class="repo-path">${escapeHtml(org)}/${escapeHtml(repo)}</p>
+            <a href="https://github.com/${escapeHtml(org)}/${escapeHtml(repo)}" target="_blank" class="import-card-link">
               View Repository →
             </a>
           </div>
@@ -485,8 +503,8 @@ export function processingTemplate({
             <h3>GitHub Repository</h3>
           </div>
           <div class="import-card-body">
-            <p class="repo-path">${processStatus.github.org}/${processStatus.github.repo}</p>
-            <a href="https://github.com/${processStatus.github.org}/${processStatus.github.repo}" target="_blank" class="import-card-link">
+            <p class="repo-path">${escapeHtml(processStatus.github.org)}/${escapeHtml(processStatus.github.repo)}</p>
+            <a href="https://github.com/${escapeHtml(processStatus.github.org)}/${escapeHtml(processStatus.github.repo)}" target="_blank" class="import-card-link">
               View Repository →
             </a>
           </div>
@@ -970,6 +988,7 @@ export function templatesSectionTemplate({
         ${templates.length > 0 ? `
           <div class="pending-changes">
             <h4>Pending Changes (${templates.length})</h4>
+            <p class="pending-changes-hint">Click the button below to save to the library.</p>
             <ul class="templates-list">
               ${templates.map((template, index) => {
     const itemDisplayPath = template.path.replace(/^\/[^/]+\/[^/]+/, '');
@@ -1102,6 +1121,7 @@ export function iconsSectionTemplate({
         ${icons.length > 0 ? `
           <div class="pending-changes">
             <h4>Pending Changes (${icons.length})</h4>
+            <p class="pending-changes-hint">Click the button below to save to the library.</p>
             <ul class="icons-list">
               ${icons.map((icon, index) => {
     const itemDisplayPath = icon.path.replace(/^\/[^/]+\/[^/]+/, '');
@@ -1225,6 +1245,7 @@ export function placeholdersSectionTemplate({
         ${placeholders.length > 0 ? `
           <div class="pending-changes">
             <h4>Pending Changes (${placeholders.length})</h4>
+            <p class="pending-changes-hint">Click the button below to save to the library.</p>
             <ul class="placeholders-list">
               ${placeholders.map((placeholder, index) => `
                 <li class="placeholder-item">
@@ -1249,12 +1270,27 @@ export function placeholdersSectionTemplate({
 export function aemAssetsSectionTemplate({
   config,
   loading = false,
-  validating = false,
   message,
 }) {
+  const repoValidation = config.repositoryIdValidation || {};
+  const prodValidation = config.prodOriginValidation || {};
+
+  const getValidationClass = (validation) => {
+    if (validation.valid === false) return 'invalid';
+    if (validation.valid === true) return 'valid';
+    return '';
+  };
+
   return `
     <div class="form-section aem-assets-section">
       ${message}
+      
+      ${config.exists && !message ? `
+        <div class="info-banner">
+          <strong>ℹ️ Configuration exists</strong>
+          <p>You are editing an existing AEM Assets integration. Changes will update the current configuration.</p>
+        </div>
+      ` : ''}
       
       ${loading ? '<p class="loading-message">Loading configuration...</p>' : ''}
       
@@ -1268,26 +1304,26 @@ export function aemAssetsSectionTemplate({
               type="text" 
               id="aem-repository-id" 
               value="${config.repositoryId}"
-              placeholder="author-pxxxx-eyyyy.adobeaemcloud.com">
-            <p class="field-help">Use 'author-' or 'delivery-' prefix for your AEM environment</p>
+              placeholder="author-pxxxx-eyyyy.adobeaemcloud.com"
+              class="${getValidationClass(repoValidation)}">
+            <p class="field-help">Hostname only (no https://). Use 'author-' for author or 'delivery-' for Dynamic Media delivery</p>
+            ${repoValidation.validating ? '<p class="validation-message validating">Validating...</p>' : ''}
+            ${repoValidation.valid === true ? `<p class="validation-message valid">${repoValidation.message}</p>` : ''}
+            ${repoValidation.valid === false ? `<p class="validation-message invalid">${repoValidation.message}</p>` : ''}
           </div>
           
           <div class="form-field">
             <label for="aem-prod-origin">Production Origin (Optional)</label>
-            <div class="input-with-button">
-              <input 
-                type="url" 
-                id="aem-prod-origin" 
-                value="${config.prodOrigin}"
-                placeholder="https://mysite.com">
-              <button 
-                id="verify-aem-url" 
-                class="action"
-                ${validating ? 'disabled' : ''}>
-                ${validating ? 'Verifying...' : 'Verify'}
-              </button>
-            </div>
+            <input 
+              type="text" 
+              id="aem-prod-origin" 
+              value="${config.prodOrigin}"
+              placeholder="https://mysite.com"
+              class="${getValidationClass(prodValidation)}">
             <p class="field-help">Custom domain for loading assets</p>
+            ${prodValidation.validating ? '<p class="validation-message validating">Validating...</p>' : ''}
+            ${prodValidation.valid === true ? `<p class="validation-message valid">${prodValidation.message}</p>` : ''}
+            ${prodValidation.valid === false ? `<p class="validation-message invalid">${prodValidation.message}</p>` : ''}
           </div>
           
           <div class="form-field">

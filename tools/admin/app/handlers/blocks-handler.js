@@ -2,6 +2,7 @@ import * as githubOps from '../../operations/github.js';
 import * as libraryOps from '../../operations/library.js';
 import * as daApi from '../../utils/da-api.js';
 import TokenStorage from '../../utils/token-storage.js';
+import { DOM_IDS, ERROR_KEYS } from '../constants.js';
 
 // discoverBlocks must be defined before validateRepository which calls it
 export async function discoverBlocks(app, state) {
@@ -117,12 +118,12 @@ export async function validateRepository(app, state) {
 }
 
 export async function handleValidateWithToken(app, state) {
-  const tokenInput = document.getElementById('github-token');
-  const saveCheckbox = document.getElementById('save-token');
+  const tokenInput = document.getElementById(DOM_IDS.GITHUB_TOKEN);
+  const saveCheckbox = document.getElementById(DOM_IDS.SAVE_TOKEN);
   const token = tokenInput?.value.trim();
 
   if (!token) {
-    state.errors.github = 'Please enter a GitHub token';
+    state.errors[ERROR_KEYS.GITHUB] = 'Please enter a GitHub token';
     app.render();
     return;
   }
@@ -199,22 +200,22 @@ export function selectNewBlocksOnly(state, render) {
 }
 
 export function attachBlocksListeners(app, state) {
-  const validateRepoBtn = document.getElementById('validate-repository');
+  const validateRepoBtn = document.getElementById(DOM_IDS.VALIDATE_REPOSITORY);
   if (validateRepoBtn) {
     validateRepoBtn.addEventListener('click', () => validateRepository(app, state));
   }
 
-  const loadExistingBlocksBtn = document.getElementById('load-existing-blocks');
+  const loadExistingBlocksBtn = document.getElementById(DOM_IDS.LOAD_EXISTING_BLOCKS);
   if (loadExistingBlocksBtn) {
     loadExistingBlocksBtn.addEventListener('click', () => handleLoadExistingBlocks(state, () => app.render()));
   }
 
-  const validateWithTokenBtn = document.getElementById('validate-with-token');
+  const validateWithTokenBtn = document.getElementById(DOM_IDS.VALIDATE_WITH_TOKEN);
   if (validateWithTokenBtn) {
     validateWithTokenBtn.addEventListener('click', () => handleValidateWithToken(app, state));
   }
 
-  const clearTokenBtn = document.getElementById('clear-token');
+  const clearTokenBtn = document.getElementById(DOM_IDS.CLEAR_TOKEN);
   if (clearTokenBtn) {
     clearTokenBtn.addEventListener('click', () => handleClearToken(state, () => app.render()));
   }
@@ -232,12 +233,12 @@ export function attachBlocksListeners(app, state) {
     });
   });
 
-  const toggleAllBtn = document.getElementById('toggle-all-blocks');
+  const toggleAllBtn = document.getElementById(DOM_IDS.TOGGLE_ALL_BLOCKS);
   if (toggleAllBtn) {
     toggleAllBtn.addEventListener('click', () => toggleAllBlocks(state, () => app.render()));
   }
 
-  const selectNewOnlyBtn = document.getElementById('select-new-only');
+  const selectNewOnlyBtn = document.getElementById(DOM_IDS.SELECT_NEW_ONLY);
   if (selectNewOnlyBtn) {
     selectNewOnlyBtn.addEventListener('click', () => selectNewBlocksOnly(state, () => app.render()));
   }

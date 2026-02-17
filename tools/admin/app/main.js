@@ -5,20 +5,25 @@ import DA_SDK from 'https://da.live/nx/utils/sdk.js';
 
 import state, { resetModeState, clearErrors } from './state.js';
 import * as templates from './templates.js';
-import * as githubOps from '../operations/github.js';
-import * as libraryOps from '../operations/library.js';
 import * as daApi from '../utils/da-api.js';
 import TokenStorage from '../utils/token-storage.js';
-import GitHubAPI from '../utils/github-api.js';
 import loadCSS from '../utils/css-loader.js';
-import { templatesHandler, iconsHandler, placeholdersHandler } from './handlers/library-item-handler-factory.js';
-import * as pagePickerHandlers from './handlers/page-picker-handlers.js';
-import * as blocksHandlers from './handlers/blocks-handlers.js';
-import * as aemAssetsHandlers from './handlers/aem-assets-handlers.js';
-import * as translationHandlers from './handlers/translation-handlers.js';
-import * as universalEditorHandlers from './handlers/universal-editor-handlers.js';
+import { templatesHandler, iconsHandler, placeholdersHandler } from './handlers/lib-item-factory.js';
+import * as pagePickerHandlers from './handlers/page-picker-handler.js';
+import * as blocksHandlers from './handlers/blocks-handler.js';
+import * as aemAssetsHandlers from './handlers/assets-cfg-handler.js';
+import * as translationHandlers from './handlers/xlat-cfg-handler.js';
+import * as universalEditorHandlers from './handlers/ue-cfg-handler.js';
+import * as processingHandler from './handlers/processing-handler.js';
+import {
+  MODES, ROUTES, DOM_IDS, ERROR_KEYS,
+} from './constants.js';
 import { initRouter, getCurrentRoute } from './router.js';
 import * as libraryItemsManager from '../operations/library-items-manager.js';
+import * as libraryOps from '../operations/library.js';
+import { removeLibraryTemplate } from '../operations/templates.js';
+import { removeLibraryIcon } from '../operations/icons.js';
+import { removeLibraryPlaceholder } from '../operations/placeholders.js';
 
 const app = {
   async init() {
@@ -53,20 +58,21 @@ const app = {
 
     this.container = container;
     await this.loadInitialCSS();
+    this.ensureConfirmModalContainer();
 
     initRouter({
-      blocks: () => this.renderBlocksView(),
-      templates: () => this.renderTemplatesView(),
-      icons: () => this.renderIconsView(),
-      placeholders: () => this.renderPlaceholdersView(),
-      'aem-assets': () => this.renderAemAssetsView(),
-      translation: () => this.renderTranslationView(),
-      'universal-editor': () => this.renderUniversalEditorView(),
+      [ROUTES.BLOCKS]: () => this.renderBlocksView(),
+      [ROUTES.TEMPLATES]: () => this.renderTemplatesView(),
+      [ROUTES.ICONS]: () => this.renderIconsView(),
+      [ROUTES.PLACEHOLDERS]: () => this.renderPlaceholdersView(),
+      [ROUTES.AEM_ASSETS]: () => this.renderAemAssetsView(),
+      [ROUTES.TRANSLATION]: () => this.renderTranslationView(),
+      [ROUTES.UNIVERSAL_EDITOR]: () => this.renderUniversalEditorView(),
     });
 
     this.attachEventListeners();
 
-    if (state.mode === 'refresh' && state.org && state.site) {
+    if (state.mode === MODES.REFRESH && state.org && state.site) {
       await this.handleLoadExistingBlocks();
     }
   },
@@ -80,13 +86,25 @@ const app = {
   },
 
   async renderBlocksView() {
+    if (state.org && state.site && !state.blocksDefaultModeSet) {
+      state.blocksDefaultModeSet = true;
+      const check = await libraryOps.checkLibraryExists(state.org, state.site);
+      state.libraryExists = check.exists;
+      state.mode = state.libraryExists ? MODES.REFRESH : MODES.SETUP;
+      if (state.mode === MODES.REFRESH) {
+        // handleLoadExistingBlocks calls render() internally — let it own the render
+        await blocksHandlers.handleLoadExistingBlocks(state, () => this.render());
+        return;
+      }
+    }
+
     const cssToLoad = [];
 
-    if (state.mode === 'setup' && !state.repositoryValidated) {
+    if (state.mode === MODES.SETUP && !state.repositoryValidated) {
       cssToLoad.push(loadCSS('github-section.css'));
     }
 
-    if (state.blocksDiscovered || state.mode === 'refresh') {
+    if (state.blocksDiscovered || state.mode === MODES.REFRESH) {
       cssToLoad.push(loadCSS('blocks-section.css'));
     }
 
@@ -110,12 +128,12 @@ const app = {
       currentMode: state.mode,
     }));
 
-    if (state.mode === 'setup') {
+    if (state.mode === MODES.SETUP) {
       sections.push(templates.githubSectionTemplate({
         isValidated: state.repositoryValidated,
         validating: state.validating,
         githubUrl: state.githubUrl,
-        message: state.errors.github ? templates.messageTemplate(state.errors.github, 'error') : '',
+        message: state.errors[ERROR_KEYS.GITHUB] ? templates.messageTemplate(state.errors[ERROR_KEYS.GITHUB], 'error') : '',
       }));
 
       if (state.needsToken && !state.repositoryValidated) {
@@ -125,11 +143,11 @@ const app = {
       }
     }
 
-    if ((state.mode === 'setup' && state.repositoryValidated) || state.mode === 'refresh') {
+    if ((state.mode === MODES.SETUP && state.repositoryValidated) || state.mode === MODES.REFRESH) {
       sections.push(templates.siteSectionTemplate({
         org: state.org,
         site: state.site,
-        message: state.errors.site ? templates.messageTemplate(state.errors.site, 'error') : '',
+        message: state.errors[ERROR_KEYS.SITE] ? templates.messageTemplate(state.errors[ERROR_KEYS.SITE], 'error') : '',
         mode: state.mode,
       }));
     }
@@ -138,14 +156,14 @@ const app = {
       sections.push(templates.blocksListTemplate({
         blocks: state.blocks,
         selectedBlocks: state.selectedBlocks,
-        message: state.errors.blocks ? templates.messageTemplate(state.errors.blocks, 'error') : '',
+        message: state.errors[ERROR_KEYS.BLOCKS] ? templates.messageTemplate(state.errors[ERROR_KEYS.BLOCKS], 'error') : '',
       }));
 
       if (state.selectedBlocks.size > 0) {
         sections.push(templates.pagesSelectionTemplate({
           allSites: this.getAllSites(),
           pageSelections: state.pageSelections,
-          message: state.errors.pages ? templates.messageTemplate(state.errors.pages, 'error') : '',
+          message: state.errors[ERROR_KEYS.PAGES] ? templates.messageTemplate(state.errors[ERROR_KEYS.PAGES], 'error') : '',
           daToken: state.daToken,
           org: state.org,
           mode: state.mode,
@@ -221,11 +239,16 @@ const app = {
 
     if (shouldLoad) {
       state[loadingKey] = true;
-      state[existingKey] = await libraryItemsManager[`fetchExisting${capitalizedPlural}`](
-        state.org,
-        state.site,
-      );
-      state[loadingKey] = false;
+      try {
+        state[existingKey] = await libraryItemsManager[`fetchExisting${capitalizedPlural}`](
+          state.org,
+          state.site,
+        );
+      } catch (error) {
+        state.errors[pluralType] = `Failed to load ${pluralType}: ${error.message}`;
+      } finally {
+        state[loadingKey] = false;
+      }
     }
 
     const filteredExisting = libraryItemsManager.filterItems(
@@ -375,7 +398,6 @@ const app = {
       errorKey: 'aemAssets',
       fetchFunction: daApi.fetchAemAssetsConfig,
       shouldLoadCheck: () => state.org && state.site && state.aemAssetsConfig.repositoryId === '',
-      additionalProps: { validating: state.validatingAemUrl },
     });
   },
 
@@ -410,13 +432,13 @@ const app = {
   async render() {
     const route = getCurrentRoute();
     const viewMap = {
-      blocks: () => this.renderBlocksView(),
-      templates: () => this.renderTemplatesView(),
-      icons: () => this.renderIconsView(),
-      placeholders: () => this.renderPlaceholdersView(),
-      'aem-assets': () => this.renderAemAssetsView(),
-      translation: () => this.renderTranslationView(),
-      'universal-editor': () => this.renderUniversalEditorView(),
+      [ROUTES.BLOCKS]: () => this.renderBlocksView(),
+      [ROUTES.TEMPLATES]: () => this.renderTemplatesView(),
+      [ROUTES.ICONS]: () => this.renderIconsView(),
+      [ROUTES.PLACEHOLDERS]: () => this.renderPlaceholdersView(),
+      [ROUTES.AEM_ASSETS]: () => this.renderAemAssetsView(),
+      [ROUTES.TRANSLATION]: () => this.renderTranslationView(),
+      [ROUTES.UNIVERSAL_EDITOR]: () => this.renderUniversalEditorView(),
     };
 
     if (viewMap[route]) {
@@ -434,7 +456,7 @@ const app = {
       });
     });
 
-    const githubUrlInput = document.getElementById('github-url');
+    const githubUrlInput = document.getElementById(DOM_IDS.GITHUB_URL);
     if (githubUrlInput && !state.repositoryValidated) {
       githubUrlInput.addEventListener('input', (e) => {
         state.githubUrl = e.target.value;
@@ -451,23 +473,25 @@ const app = {
       });
     }
 
-    const orgInput = document.getElementById('org-name');
+    const orgInput = document.getElementById(DOM_IDS.ORG_NAME);
     if (orgInput) {
       orgInput.addEventListener('input', (e) => {
         state.org = e.target.value.trim();
-        state.errors.site = '';
+        state.errors[ERROR_KEYS.SITE] = '';
+        state.blocksDefaultModeSet = false;
       });
     }
 
-    const siteInput = document.getElementById('site-name');
+    const siteInput = document.getElementById(DOM_IDS.SITE_NAME);
     if (siteInput) {
       siteInput.addEventListener('input', (e) => {
         state.site = e.target.value.trim();
-        state.errors.site = '';
+        state.errors[ERROR_KEYS.SITE] = '';
+        state.blocksDefaultModeSet = false;
       });
     }
 
-    const startBtn = document.getElementById('start-processing');
+    const startBtn = document.getElementById(DOM_IDS.START_PROCESSING);
     if (startBtn) {
       startBtn.addEventListener('click', () => this.handleStartProcessing());
     }
@@ -498,7 +522,7 @@ const app = {
       btn.addEventListener('click', () => this.hideErrorModal());
     });
 
-    const errorModalOverlay = document.getElementById('error-modal');
+    const errorModalOverlay = document.getElementById(DOM_IDS.ERROR_MODAL);
     if (errorModalOverlay) {
       errorModalOverlay.addEventListener('click', (e) => {
         if (e.target === errorModalOverlay) {
@@ -520,7 +544,7 @@ const app = {
     state.messageType = 'info';
     clearErrors();
 
-    if (newMode === 'refresh') {
+    if (newMode === MODES.REFRESH) {
       resetModeState();
       this.render();
       if (state.org && state.site) {
@@ -529,7 +553,7 @@ const app = {
       return;
     }
 
-    if (newMode === 'setup') {
+    if (newMode === MODES.SETUP) {
       resetModeState(true);
     }
 
@@ -537,387 +561,34 @@ const app = {
   },
 
   async handleGitHubUrlChange(url) {
-    state.githubUrl = url.trim();
-
-    const parsed = githubOps.parseGitHubURL(state.githubUrl);
-    if (parsed && parsed.org && parsed.repo) {
-      state.org = parsed.org;
-      state.repo = parsed.repo;
-      state.site = parsed.repo;
-
-      await this.validateRepository();
+    await blocksHandlers.handleGitHubUrlChange(state, () => this.render(), url);
+    if (state.org && state.repo) {
+      await blocksHandlers.validateRepository(this, state);
     }
   },
 
   async validateRepository() {
-    state.validating = true;
-    this.render();
-    try {
-      const result = await githubOps.validateRepository(state.org, state.repo, state.githubToken);
-
-      if (!result.valid) {
-        if (result.error === 'rate_limit') {
-          state.needsToken = true;
-          state.errors.github = `GitHub API rate limit exceeded (resets at ${result.resetTime}). Please add a GitHub token to continue, or wait and try again.`;
-          state.validating = false;
-          this.render();
-          return;
-        }
-
-        if (result.error === 'not_found') {
-          state.errors.github = 'Repository not found. Please check the URL and try again.';
-          state.validating = false;
-          this.render();
-          return;
-        }
-
-        if (result.error === 'private' && result.needsToken) {
-          state.needsToken = true;
-          state.errors.github = 'Unable to access repository. If this is a private repository, please enter a GitHub token below.';
-          state.validating = false;
-          this.render();
-          return;
-        }
-
-        state.errors.github = result.error === 'private' ? 'Unable to access repository with provided token.' : result.error;
-        state.validating = false;
-        this.render();
-        return;
-      }
-
-      state.repositoryValidated = true;
-      state.needsToken = false;
-
-      state.validating = false;
-      this.render();
-      await this.discoverBlocks();
-    } catch (error) {
-      let errorMsg = error.message;
-      if (errorMsg.includes('404') || errorMsg.includes('Not Found')) {
-        errorMsg = 'Please enter a valid GitHub repository URL.';
-      } else if (errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError')) {
-        errorMsg = 'Network error. Please check your connection and try again.';
-      }
-
-      state.message = errorMsg;
-      state.messageType = 'error';
-      state.validating = false;
-      this.render();
-    }
+    await blocksHandlers.validateRepository(this, state);
   },
 
   async handleValidateWithToken() {
-    const tokenInput = document.getElementById('github-token');
-    const saveCheckbox = document.getElementById('save-token');
-    const token = tokenInput?.value.trim();
-
-    if (!token) {
-      state.errors.github = 'Please enter a GitHub token';
-      this.render();
-      return;
-    }
-
-    if (saveCheckbox?.checked) {
-      TokenStorage.set(token);
-    }
-
-    state.githubToken = token;
-    await this.validateRepository();
+    await blocksHandlers.handleValidateWithToken(this, state);
   },
 
   handleClearToken() {
-    TokenStorage.clear();
-    state.githubToken = null;
-    state.message = 'Saved token cleared';
-    state.messageType = 'success';
-    this.render();
+    blocksHandlers.handleClearToken(state, () => this.render());
   },
 
   async handleLoadExistingBlocks() {
-    if (!state.org || !state.site) {
-      state.errors.site = 'Please enter both organization and site name';
-      this.render();
-      return;
-    }
-
-    state.discovering = true;
-    this.render();
-
-    try {
-      const blocks = await libraryOps.fetchExistingBlocks(state.org, state.site);
-
-      if (blocks.length === 0) {
-        state.errors.site = 'No library found at this location. Please run "Library Setup" first to create the library.';
-        state.discovering = false;
-        this.render();
-        return;
-      }
-
-      state.blocks = blocks.map((block) => ({
-        ...block,
-        isNew: false,
-      }));
-      state.blocksDiscovered = true;
-      state.discovering = false;
-      state.selectedBlocks = new Set(blocks.map((b) => b.name));
-      state.errors = {
-        github: '', site: '', blocks: '', pages: '',
-      };
-      this.render();
-    } catch (error) {
-      state.errors.site = `Unable to load library: ${error.message}. Please run "Library Setup" first to create the library.`;
-      state.discovering = false;
-      this.render();
-    }
+    await blocksHandlers.handleLoadExistingBlocks(state, () => this.render());
   },
 
   async discoverBlocks() {
-    state.discovering = true;
-    this.render();
-    try {
-      const blocks = await githubOps.discoverBlocks(state.org, state.repo, state.githubToken);
-
-      const existingBlocksJSON = await daApi.fetchBlocksJSON(state.org, state.site);
-
-      const existingBlockNames = new Set(
-        existingBlocksJSON?.data?.data?.map((b) => {
-          const pathParts = b.path.split('/');
-          return pathParts[pathParts.length - 1]; // Get last part of path (kebab-case name)
-        }) || [],
-      );
-
-      state.blocks = blocks.map((block) => ({
-        ...block,
-        isNew: !existingBlockNames.has(block.name),
-      }));
-
-      state.blocksDiscovered = true;
-      state.discovering = false;
-
-      state.selectedBlocks = new Set(blocks.map((b) => b.name));
-
-      const libraryCheck = await libraryOps.checkLibraryExists(state.org, state.site);
-      state.libraryExists = libraryCheck.exists;
-
-      this.render();
-    } catch (error) {
-      state.errors.github = `Block discovery failed: ${error.message}`;
-      state.discovering = false;
-      this.render();
-    }
+    await blocksHandlers.discoverBlocks(this, state);
   },
 
   async handleStartProcessing() {
-    if (!state.daToken) {
-      state.errors.pages = 'DA.live authentication required. This tool must be run from within DA.live.';
-      this.render();
-      return;
-    }
-
-    const siteValid = await this.validateSite(state.org, state.site, state.daToken);
-    if (!siteValid) {
-      state.errors.site = `Site "${state.org}/${state.site}" not found in DA.live. Please verify the site name.`;
-      this.render();
-      return;
-    }
-
-    state.processing = true;
-    const baseStatus = {
-      errors: { count: 0, messages: [] },
-      completed: false,
-    };
-
-    if (state.selectedBlocks.size > 0) {
-      baseStatus.github = { org: state.org, repo: state.repo, status: 'complete' };
-      baseStatus.blocks = { total: state.selectedBlocks.size, status: 'complete' };
-      baseStatus.blockDocs = { created: 0, total: state.selectedBlocks.size, status: 'pending' };
-    }
-
-    if (state.selectedTemplates.length > 0) {
-      baseStatus.templates = { processed: 0, total: state.selectedTemplates.length, status: 'pending' };
-    }
-
-    if (state.selectedIcons.length > 0) {
-      baseStatus.icons = { processed: 0, total: state.selectedIcons.length, status: 'pending' };
-    }
-
-    if (state.selectedPlaceholders.length > 0) {
-      baseStatus.placeholders = { processed: 0, total: state.selectedPlaceholders.length, status: 'pending' };
-    }
-
-    if (state.mode === 'setup') {
-      baseStatus.siteConfig = { status: 'pending', message: '' };
-
-      if (state.selectedBlocks.size > 0) {
-        baseStatus.blocksJson = { status: 'pending', message: '' };
-      }
-      if (state.selectedTemplates.length > 0) {
-        baseStatus.templatesJson = { status: 'pending', message: '' };
-      }
-      if (state.selectedIcons.length > 0) {
-        baseStatus.iconsJson = { status: 'pending', message: '' };
-      }
-      if (state.selectedPlaceholders.length > 0) {
-        baseStatus.placeholdersJson = { status: 'pending', message: '' };
-      }
-    }
-
-    state.processStatus = baseStatus;
-    this.render();
-
-    try {
-      const selectedBlockNames = Array.from(state.selectedBlocks);
-      const sitesWithPages = this.getAllSites().map((site) => ({
-        org: state.org,
-        site,
-        pages: Array.from(state.pageSelections[site] || []),
-      }));
-
-      let githubApi = null;
-      if (state.mode === 'setup' && state.org && state.repo) {
-        githubApi = new GitHubAPI(state.org, state.repo, 'main', state.githubToken);
-      }
-
-      const results = await libraryOps.setupLibrary({
-        org: state.org,
-        site: state.site,
-        blockNames: selectedBlockNames,
-        templates: state.selectedTemplates,
-        icons: state.selectedIcons,
-        placeholders: state.selectedPlaceholders,
-        sitesWithPages,
-        onProgress: (progress) => this.handleProgress(progress),
-        skipSiteConfig: state.mode === 'refresh',
-        githubApi,
-      });
-
-      if (!results.success) {
-        throw new Error(results.error || 'Library setup failed');
-      }
-
-      state.processStatus.completed = true;
-      state.message = '';
-      state.messageType = '';
-    } catch (error) {
-      state.processStatus.errors.count += 1;
-      state.processStatus.errors.messages.push({
-        type: 'general',
-        block: 'N/A',
-        message: error.message,
-      });
-      state.message = `Processing failed: ${error.message}`;
-      state.messageType = 'error';
-    } finally {
-      state.processing = false;
-      this.render();
-    }
-  },
-
-  handleProgress(progress) {
-    if (progress.step === 'register') {
-      if (state.processStatus.siteConfig) {
-        if (progress.status === 'start') {
-          state.processStatus.siteConfig.status = 'processing';
-          state.processStatus.siteConfig.message = 'Registering library...';
-        } else if (progress.status === 'complete') {
-          state.processStatus.siteConfig.status = 'complete';
-          state.processStatus.siteConfig.message = 'Updated Site Config';
-        }
-      }
-    } else if (progress.step === 'generate' && progress.status === 'start') {
-      state.processStatus.blockDocs.status = 'processing';
-    } else if (progress.step === 'upload') {
-      if (progress.status === 'start') {
-        state.processStatus.blockDocs.status = 'processing';
-      } else if (progress.current && progress.total) {
-        state.processStatus.blockDocs.created = progress.current;
-        state.processStatus.blockDocs.status = 'processing';
-      } else if (progress.status === 'complete') {
-        const uploadSuccessCount = progress.uploadResults.filter((r) => r.success).length;
-        const uploadErrorCount = progress.uploadResults.length - uploadSuccessCount;
-
-        state.processStatus.blockDocs.created = uploadSuccessCount;
-        state.processStatus.blockDocs.status = uploadErrorCount > 0 ? 'warning' : 'complete';
-
-        if (uploadErrorCount > 0) {
-          state.processStatus.errors.count += uploadErrorCount;
-          progress.uploadResults
-            .filter((r) => !r.success)
-            .forEach((r) => state.processStatus.errors.messages.push({
-              type: 'upload',
-              block: r.name,
-              message: r.error,
-            }));
-        }
-      }
-    } else if (progress.step === 'blocks-json') {
-      if (state.processStatus.blocksJson) {
-        if (progress.status === 'start') {
-          state.processStatus.blocksJson.status = 'processing';
-          state.processStatus.blocksJson.message = state.libraryExists
-            ? 'Updating...'
-            : 'Creating...';
-        } else if (progress.status === 'complete') {
-          state.processStatus.blocksJson.status = 'complete';
-          state.processStatus.blocksJson.message = state.libraryExists
-            ? 'Updated'
-            : 'Created';
-        }
-      }
-    } else if (progress.step === 'templates-json') {
-      if (state.processStatus.templates) {
-        state.processStatus.templates.status = 'processing';
-      }
-      if (state.processStatus.templatesJson) {
-        if (progress.status === 'start') {
-          state.processStatus.templatesJson.status = 'processing';
-          state.processStatus.templatesJson.message = 'Creating...';
-        } else if (progress.status === 'complete') {
-          state.processStatus.templatesJson.status = 'complete';
-          state.processStatus.templatesJson.message = 'Created';
-          if (state.processStatus.templates) {
-            state.processStatus.templates.status = 'complete';
-            state.processStatus.templates.processed = state.selectedTemplates.length;
-          }
-        }
-      }
-    } else if (progress.step === 'icons-json') {
-      if (state.processStatus.icons) {
-        state.processStatus.icons.status = 'processing';
-      }
-      if (state.processStatus.iconsJson) {
-        if (progress.status === 'start') {
-          state.processStatus.iconsJson.status = 'processing';
-          state.processStatus.iconsJson.message = 'Creating...';
-        } else if (progress.status === 'complete') {
-          state.processStatus.iconsJson.status = 'complete';
-          state.processStatus.iconsJson.message = 'Created';
-          if (state.processStatus.icons) {
-            state.processStatus.icons.status = 'complete';
-            state.processStatus.icons.processed = state.selectedIcons.length;
-          }
-        }
-      }
-    } else if (progress.step === 'placeholders-json') {
-      if (state.processStatus.placeholders) {
-        state.processStatus.placeholders.status = 'processing';
-      }
-      if (state.processStatus.placeholdersJson) {
-        if (progress.status === 'start') {
-          state.processStatus.placeholdersJson.status = 'processing';
-          state.processStatus.placeholdersJson.message = 'Creating...';
-        } else if (progress.status === 'complete') {
-          state.processStatus.placeholdersJson.status = 'complete';
-          state.processStatus.placeholdersJson.message = 'Created';
-          if (state.processStatus.placeholders) {
-            state.processStatus.placeholders.status = 'complete';
-            state.processStatus.placeholders.processed = state.selectedPlaceholders.length;
-          }
-        }
-      }
-    }
-
-    this.render();
+    await processingHandler.handleStartProcessing(this, state);
   },
 
   toggleAllBlocks() {
@@ -972,8 +643,34 @@ const app = {
     templatesHandler.handleEditExisting(state, () => this.render(), index);
   },
 
-  handleRemoveExistingTemplate(index) {
-    templatesHandler.handleRemoveExisting(state, () => this.render(), index);
+  async handleRemoveExistingTemplate(index) {
+    const confirmed = await this.showConfirmModal({
+      title: 'Remove template',
+      message: 'Remove this template from the library? This cannot be undone.',
+      confirmLabel: 'Remove',
+    });
+    if (!confirmed) return;
+    const item = state.existingTemplates[index];
+    state.errors[ERROR_KEYS.TEMPLATES] = '';
+    this.render();
+    try {
+      const result = await removeLibraryTemplate(state.org, state.site, item.name);
+      if (result.success) {
+        state.existingTemplates.splice(index, 1);
+        if (state.editingTemplateIndex === index) {
+          state.editingTemplateIndex = -1;
+          state.templateForm = { name: '', path: '' };
+        } else if (state.editingTemplateIndex > index) {
+          state.editingTemplateIndex -= 1;
+        }
+        state.errors[ERROR_KEYS.TEMPLATES] = 'Template removed.';
+      } else {
+        state.errors[ERROR_KEYS.TEMPLATES] = result.error || 'Failed to remove template.';
+      }
+    } catch (error) {
+      state.errors[ERROR_KEYS.TEMPLATES] = error.message || 'Failed to remove template.';
+    }
+    this.render();
   },
 
   handleCancelEditTemplate() {
@@ -992,8 +689,34 @@ const app = {
     iconsHandler.handleEditExisting(state, () => this.render(), index);
   },
 
-  handleRemoveExistingIcon(index) {
-    iconsHandler.handleRemoveExisting(state, () => this.render(), index);
+  async handleRemoveExistingIcon(index) {
+    const confirmed = await this.showConfirmModal({
+      title: 'Remove icon',
+      message: 'Remove this icon from the library? This cannot be undone.',
+      confirmLabel: 'Remove',
+    });
+    if (!confirmed) return;
+    const item = state.existingIcons[index];
+    state.errors[ERROR_KEYS.ICONS] = '';
+    this.render();
+    try {
+      const result = await removeLibraryIcon(state.org, state.site, item.name);
+      if (result.success) {
+        state.existingIcons.splice(index, 1);
+        if (state.editingIconIndex === index) {
+          state.editingIconIndex = -1;
+          state.iconForm = { name: '', path: '' };
+        } else if (state.editingIconIndex > index) {
+          state.editingIconIndex -= 1;
+        }
+        state.errors[ERROR_KEYS.ICONS] = 'Icon removed.';
+      } else {
+        state.errors[ERROR_KEYS.ICONS] = result.error || 'Failed to remove icon.';
+      }
+    } catch (error) {
+      state.errors[ERROR_KEYS.ICONS] = error.message || 'Failed to remove icon.';
+    }
+    this.render();
   },
 
   handleCancelEditIcon() {
@@ -1012,20 +735,50 @@ const app = {
     placeholdersHandler.handleEditExisting(state, () => this.render(), index);
   },
 
-  handleRemoveExistingPlaceholder(index) {
-    placeholdersHandler.handleRemoveExisting(state, () => this.render(), index);
+  async handleRemoveExistingPlaceholder(index) {
+    const confirmed = await this.showConfirmModal({
+      title: 'Remove placeholder',
+      message: 'Remove this placeholder from the library? This cannot be undone.',
+      confirmLabel: 'Remove',
+    });
+    if (!confirmed) return;
+    const item = state.existingPlaceholders[index];
+    state.errors[ERROR_KEYS.PLACEHOLDERS] = '';
+    this.render();
+    try {
+      const result = await removeLibraryPlaceholder(state.org, state.site, item.key);
+      if (result.success) {
+        state.existingPlaceholders.splice(index, 1);
+        if (state.editingPlaceholderIndex === index) {
+          state.editingPlaceholderIndex = -1;
+          state.placeholderForm = { key: '', value: '' };
+        } else if (state.editingPlaceholderIndex > index) {
+          state.editingPlaceholderIndex -= 1;
+        }
+        state.errors[ERROR_KEYS.PLACEHOLDERS] = `Placeholder "${item.key}" removed.`;
+      } else {
+        state.errors[ERROR_KEYS.PLACEHOLDERS] = result.error || 'Failed to remove placeholder.';
+      }
+    } catch (error) {
+      state.errors[ERROR_KEYS.PLACEHOLDERS] = error.message || 'Failed to remove placeholder.';
+    }
+    this.render();
   },
 
   handleCancelEditPlaceholder() {
     placeholdersHandler.handleCancelEdit(state, () => this.render());
   },
 
-  handleSaveAemConfig() {
-    aemAssetsHandlers.handleSaveAemConfig(state, () => this.render(), daApi);
+  handleValidateRepositoryId() {
+    aemAssetsHandlers.handleValidateRepositoryId(state, () => this.render(), daApi);
   },
 
-  handleVerifyAemUrl() {
-    aemAssetsHandlers.handleVerifyAemUrl(state, () => this.render());
+  handleValidateProdOrigin() {
+    aemAssetsHandlers.handleValidateProdOrigin(state, () => this.render(), daApi);
+  },
+
+  handleSaveAemConfig() {
+    aemAssetsHandlers.handleSaveAemConfig(state, () => this.render(), daApi);
   },
 
   handleSaveTranslationConfig() {
@@ -1037,17 +790,76 @@ const app = {
   },
 
   showErrorModal() {
-    const modal = document.getElementById('error-modal');
+    const modal = document.getElementById(DOM_IDS.ERROR_MODAL);
     if (modal) {
       modal.style.display = 'flex';
     }
   },
 
   hideErrorModal() {
-    const modal = document.getElementById('error-modal');
+    const modal = document.getElementById(DOM_IDS.ERROR_MODAL);
     if (modal) {
       modal.style.display = 'none';
     }
+  },
+
+  ensureConfirmModalContainer() {
+    let wrap = document.getElementById(DOM_IDS.CONFIRM_MODAL);
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.id = DOM_IDS.CONFIRM_MODAL;
+      wrap.style.display = 'none';
+      document.body.appendChild(wrap);
+    }
+    this.confirmModalContainer = wrap;
+  },
+
+  showConfirmModal({
+    title, message, confirmLabel = 'Remove', cancelLabel = 'Cancel',
+  }) {
+    const wrap = this.confirmModalContainer || document.getElementById(DOM_IDS.CONFIRM_MODAL);
+    if (!wrap) return Promise.resolve(false);
+
+    wrap.innerHTML = templates.confirmModalTemplate({
+      title,
+      message,
+      confirmLabel,
+      cancelLabel,
+    });
+    wrap.style.display = 'block';
+
+    return new Promise((resolve) => {
+      const overlay = wrap.querySelector('[data-confirm-overlay]');
+      const cancelBtn = wrap.querySelector('.modal-cancel');
+      const confirmBtn = wrap.querySelector('.modal-confirm');
+      let settled = false;
+
+      // Declare onKeydown before settle so settle can reference it in removeEventListener
+      let onKeydown;
+
+      const settle = (value) => {
+        if (settled) return;
+        settled = true;
+        wrap.style.display = 'none';
+        wrap.innerHTML = '';
+        document.removeEventListener('keydown', onKeydown);
+        resolve(value);
+      };
+
+      onKeydown = (e) => {
+        if (e.key === 'Escape') settle(false);
+      };
+
+      document.addEventListener('keydown', onKeydown);
+
+      if (confirmBtn) confirmBtn.addEventListener('click', () => settle(true));
+      if (cancelBtn) cancelBtn.addEventListener('click', () => settle(false));
+      if (overlay) {
+        overlay.addEventListener('click', (e) => {
+          if (e.target === overlay) settle(false);
+        });
+      }
+    });
   },
 };
 

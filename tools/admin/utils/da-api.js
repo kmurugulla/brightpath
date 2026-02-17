@@ -1,5 +1,37 @@
 import state from '../app/state.js';
 import { LIBRARY_BLOCKS_PATH, CONTENT_DA_LIVE_BASE } from '../config.js';
+import { FETCH_TIMEOUT_MS } from '../app/constants.js';
+
+/**
+ * Wrapper around fetch that rejects after `ms` milliseconds.
+ * Uses AbortController so the in-flight request is also cancelled.
+ * @param {string} url
+ * @param {RequestInit} options
+ * @param {number} [ms]
+ * @returns {Promise<Response>}
+ */
+function fetchWithTimeout(url, options = {}, ms = FETCH_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return fetch(url, { ...options, signal: controller.signal })
+    .finally(() => clearTimeout(timer));
+}
+
+/**
+ * Sanitize a DA path segment to prevent path traversal.
+ * Strips leading slashes, collapses repeated slashes, and rejects '..'.
+ * @param {string} path
+ * @returns {string}
+ */
+export function sanitizePath(path) {
+  if (!path) return '';
+  // Reject traversal attempts
+  if (path.includes('..')) {
+    throw new Error(`Invalid path: '${path}' contains path traversal sequence`);
+  }
+  // Normalise: strip leading slash, collapse double-slashes
+  return path.replace(/\/+/g, '/').replace(/^\//, '');
+}
 
 const DA_ADMIN = 'https://admin.da.live';
 
@@ -10,6 +42,147 @@ const LIBRARY_ORDER = {
   Icons: 2,
   Placeholders: 3,
 };
+
+/**
+ * Normalize URL by prepending https:// if protocol is missing
+ * @param {string} url - The URL to normalize
+ * @returns {string} - The normalized URL
+ */
+export function normalizeUrl(url) {
+  if (!url) return '';
+  const trimmed = url.trim();
+  if (!/^https?:\/\//i.test(trimmed)) {
+    return `https://${trimmed}`;
+  }
+  return trimmed;
+}
+
+/**
+ * Strip protocol from URL to get hostname only
+ * @param {string} url - The URL to strip protocol from
+ * @returns {string} - The hostname without protocol
+ */
+export function stripProtocol(url) {
+  if (!url) return '';
+  return url.trim().replace(/^https?:\/\//i, '').replace(/\/$/, '');
+}
+
+/**
+ * Validate AEM Repository ID (hostname without protocol)
+ * @param {string} repositoryId - The repository ID to validate
+ * @returns {Promise<{valid: boolean, normalized: string, error: string|null}>}
+ */
+export async function validateRepositoryId(repositoryId) {
+  if (!repositoryId) {
+    return { valid: false, normalized: '', error: 'Repository ID is required' };
+  }
+
+  // Strip protocol if user accidentally included it
+  const normalized = stripProtocol(repositoryId);
+
+  // Check format: must start with author- or delivery-
+  if (!normalized.startsWith('author-') && !normalized.startsWith('delivery-')) {
+    return {
+      valid: false,
+      normalized,
+      error: 'Repository ID must start with "author-" or "delivery-"',
+    };
+  }
+
+  // Validate by attempting to reach it with https://
+  const testUrl = `https://${normalized}`;
+
+  try {
+    const response = await fetch(testUrl, {
+      method: 'HEAD',
+      mode: 'cors',
+      credentials: 'omit',
+      cache: 'no-cache',
+    });
+
+    // Accept both 200 (success) and 401 (unauthorized but exists)
+    const valid = response.ok || response.status === 401;
+    return {
+      valid,
+      normalized,
+      error: valid ? null : `Server returned ${response.status}`,
+    };
+  } catch (error) {
+    // CORS errors or network errors - try with no-cors as fallback
+    try {
+      await fetch(testUrl, {
+        method: 'HEAD',
+        mode: 'no-cors',
+        credentials: 'omit',
+        cache: 'no-cache',
+      });
+      // If no-cors succeeds, we assume the URL is valid
+      return {
+        valid: true,
+        normalized,
+        error: null,
+      };
+    } catch (noCorsError) {
+      return {
+        valid: false,
+        normalized,
+        error: error.message || 'Unable to reach URL',
+      };
+    }
+  }
+}
+
+/**
+ * Validate Production Origin URL (full URL with protocol)
+ * @param {string} url - The URL to validate
+ * @returns {Promise<{valid: boolean, normalized: string, error: string|null}>}
+ */
+export async function validateProductionOrigin(url) {
+  if (!url) {
+    return { valid: false, normalized: '', error: 'URL is required' };
+  }
+
+  const normalized = normalizeUrl(url);
+
+  try {
+    const response = await fetch(normalized, {
+      method: 'HEAD',
+      mode: 'cors',
+      credentials: 'omit',
+      cache: 'no-cache',
+    });
+
+    // Accept both 200 (success) and 401 (unauthorized but exists)
+    const valid = response.ok || response.status === 401;
+    return {
+      valid,
+      normalized,
+      error: valid ? null : `Server returned ${response.status}`,
+    };
+  } catch (error) {
+    // CORS errors or network errors - try with no-cors as fallback
+    try {
+      await fetch(normalized, {
+        method: 'HEAD',
+        mode: 'no-cors',
+        credentials: 'omit',
+        cache: 'no-cache',
+      });
+      // If no-cors succeeds, we assume the URL is valid
+      return {
+        valid: true,
+        normalized,
+        error: null,
+      };
+    } catch (noCorsError) {
+      return {
+        valid: false,
+        normalized,
+        error: error.message || 'Unable to reach URL',
+      };
+    }
+  }
+}
 
 function sortLibraryData(libraryData) {
   return libraryData.sort((a, b) => {
@@ -30,7 +203,7 @@ async function daFetch(url, options = {}) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(url, { ...options, headers });
+  const response = await fetchWithTimeout(url, { ...options, headers });
 
   return response;
 }
@@ -802,6 +975,7 @@ export async function registerPlaceholdersInConfig(org, site) {
 export async function fetchAemAssetsConfig(org, site) {
   try {
     const config = await fetchSiteConfig(org, site);
+
     if (!config || !config.data || !config.data.data) {
       return {
         repositoryId: '',
@@ -810,19 +984,44 @@ export async function fetchAemAssetsConfig(org, site) {
         renditionsSelect: false,
         dmDelivery: false,
         smartCropSelect: false,
+        exists: false,
       };
     }
 
     const dataItems = config.data.data;
-    const configMap = new Map(dataItems.map((item) => [item.key, item.value]));
+
+    // Filter out header row (Key/Value) and empty objects
+    const configMap = new Map(
+      dataItems
+        .filter((item) => {
+          // Filter out empty objects
+          if (!item || typeof item !== 'object' || Object.keys(item).length === 0) {
+            return false;
+          }
+          // Filter out header row
+          if (item.key === 'Key' || item.key === 'key') {
+            return false;
+          }
+          // Filter out items with empty key
+          if (!item.key || item.key.trim() === '') {
+            return false;
+          }
+          return true;
+        })
+        .map((item) => [item.key, item.value]),
+    );
+
+    const repositoryId = configMap.get('aem.repositoryId') || '';
+    const hasConfig = repositoryId !== '';
 
     return {
-      repositoryId: configMap.get('aem.repositoryId') || '',
+      repositoryId,
       prodOrigin: configMap.get('aem.assets.prod.origin') || '',
       imageType: configMap.get('aem.assets.image.type') === 'link',
       renditionsSelect: configMap.get('aem.assets.renditions.select') === 'on',
       dmDelivery: configMap.get('aem.asset.dm.delivery') === 'on',
       smartCropSelect: configMap.get('aem.asset.smartcrop.select') === 'on',
+      exists: hasConfig,
     };
   } catch (error) {
     return {
@@ -832,6 +1031,7 @@ export async function fetchAemAssetsConfig(org, site) {
       renditionsSelect: false,
       dmDelivery: false,
       smartCropSelect: false,
+      exists: false,
     };
   }
 }
@@ -868,6 +1068,7 @@ export async function updateAemAssetsConfig(org, site, aemConfig) {
     }
 
     const dataItems = [...config.data.data];
+
     const aemKeys = [
       'aem.repositoryId',
       'aem.assets.prod.origin',
@@ -877,8 +1078,29 @@ export async function updateAemAssetsConfig(org, site, aemConfig) {
       'aem.asset.smartcrop.select',
     ];
 
-    const filteredData = dataItems.filter((item) => !aemKeys.includes(item.key));
+    // Helper function to check if an object is empty or has no meaningful data
+    const isEmptyOrInvalid = (item) => {
+      if (!item || typeof item !== 'object') return true;
+      const keys = Object.keys(item);
+      if (keys.length === 0) return true;
+      // Check if item has a key property that's empty or undefined
+      if ('key' in item && (!item.key || item.key.trim() === '')) return true;
+      return false;
+    };
 
+    // Preserve all non-AEM data, filter out empty objects, AEM keys, and header rows
+    // Note: DA.live automatically adds the header row in the UI, so we don't need to include it
+    const filteredData = dataItems.filter(
+      (item) => {
+        if (isEmptyOrInvalid(item)) return false;
+        if (aemKeys.includes(item.key)) return false;
+        // Filter out any existing header rows (Key/Value or key/value)
+        if (item.key === 'Key' || item.key === 'key') return false;
+        return true;
+      },
+    );
+
+    // Add AEM configuration values (only if they're set)
     if (aemConfig.repositoryId) {
       filteredData.push({
         key: 'aem.repositoryId',
@@ -1005,13 +1227,26 @@ export async function updateTranslationConfig(org, site, translationConfig) {
     }
 
     const dataItems = [...config.data.data];
+
+    // Check if we need to add header row (empty data sheet)
+    const needsHeader = dataItems.length === 0;
+
     const translationKeys = [
       'translate.behavior',
       'translate.staging',
       'rollout.behavior',
     ];
 
+    // Filter out translation-specific keys, preserving other entries
     const filteredData = dataItems.filter((item) => !translationKeys.includes(item.key));
+
+    // Add header row if needed (empty data sheet)
+    if (needsHeader) {
+      filteredData.push({
+        key: 'Key',
+        value: 'Value',
+      });
+    }
 
     filteredData.push({
       key: 'translate.behavior',
@@ -1106,9 +1341,22 @@ export async function updateUniversalEditorConfig(org, site, ueConfig) {
     }
 
     const dataItems = [...config.data.data];
+
+    // Check if we need to add header row (empty data sheet)
+    const needsHeader = dataItems.length === 0;
+
     const ueKeys = ['editor.path'];
 
+    // Filter out UE-specific keys, preserving other entries
     const filteredData = dataItems.filter((item) => !ueKeys.includes(item.key));
+
+    // Add header row if needed (empty data sheet)
+    if (needsHeader) {
+      filteredData.push({
+        key: 'Key',
+        value: 'Value',
+      });
+    }
 
     if (ueConfig.editorPath) {
       filteredData.push({

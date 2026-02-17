@@ -1,8 +1,10 @@
+import { DOM_IDS } from '../constants.js';
+
 export function attachTranslationListeners(app, state) {
-  const translateBehaviorSelect = document.getElementById('translate-behavior');
-  const translateStagingSelect = document.getElementById('translate-staging');
-  const rolloutBehaviorSelect = document.getElementById('rollout-behavior');
-  const saveConfigBtn = document.getElementById('save-translation-config');
+  const translateBehaviorSelect = document.getElementById(DOM_IDS.TRANSLATE_BEHAVIOR);
+  const translateStagingSelect = document.getElementById(DOM_IDS.TRANSLATE_STAGING);
+  const rolloutBehaviorSelect = document.getElementById(DOM_IDS.ROLLOUT_BEHAVIOR);
+  const saveConfigBtn = document.getElementById(DOM_IDS.SAVE_TRANSLATION_CONFIG);
 
   if (translateBehaviorSelect) {
     translateBehaviorSelect.addEventListener('change', (e) => {

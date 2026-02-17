@@ -2,7 +2,29 @@ import {
   fetchTemplatesJSON,
   updateTemplatesJSON,
 } from '../utils/da-api.js';
-import { mergeLibraryItems } from './library-items.js';
+import { mergeLibraryItems, normalizeIdentifier } from './library-items.js';
+
+export async function removeLibraryTemplate(org, site, templateKey) {
+  const existingJSON = await fetchTemplatesJSON(org, site);
+  const existingData = existingJSON?.data?.data || existingJSON?.data || [];
+  const targetId = normalizeIdentifier(templateKey);
+  const merged = existingData.filter(
+    (item) => normalizeIdentifier(item.key) !== targetId,
+  );
+  if (merged.length === existingData.length) {
+    return { success: true, removed: false };
+  }
+  const templatesJSON = {
+    ':version': 3,
+    ':type': 'sheet',
+    total: merged.length,
+    limit: merged.length,
+    offset: 0,
+    data: merged,
+  };
+  const updateResult = await updateTemplatesJSON(org, site, templatesJSON);
+  return { ...updateResult, removed: true };
+}
 
 // eslint-disable-next-line import/prefer-default-export
 export async function updateLibraryTemplatesJSON(org, site, templates) {

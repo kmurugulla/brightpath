@@ -37,6 +37,35 @@ curl -L https://github.com/kmurugulla/brightpath/archive/refs/heads/main.tar.gz 
 
 Copy the entire `tools/admin` directory into your project's `tools/` folder.
 
+### Register as Site App (Recommended)
+
+After installation, register the Site Admin tool in your DA.live site configuration to make it easily accessible from the Apps page.
+
+1. Navigate to your site config: `https://da.live/config#/{org}/{site}/`
+2. Switch to the **apps** sheet (or create one if it doesn't exist)
+3. Add a new row with the following values:
+
+| Column | Value |
+|--------|-------|
+| **title** | `Site Admin` |
+| **description** | `Visual interface for configuring site` |
+| **image** | `https://milostudio--milo--adobecom.aem.live/img/tools/search.jpg` (or your own image URL) |
+| **path** | `https://da.live/app/{org}/{site}/tools/admin/siteadmin` |
+| **ref** | `local` (for development) or leave empty (for production) |
+
+4. Replace `{org}` with your organization name (e.g., `kmurugulla`)
+5. Replace `{site}` with your site name (e.g., `brightpath`)
+6. Save the configuration
+
+**Example:**
+- Organization: `myorg`
+- Site: `mysite`
+- Path: `https://da.live/app/myorg/mysite/tools/admin/siteadmin`
+
+Once registered, the Site Admin tool will appear as a card on your DA.live Apps page at `https://da.live/apps#/{org}/{site}`.
+
+For more information about developing and registering DA.live apps, see the [official documentation](https://docs.da.live/developers/guides/developing-apps-and-plugins).
+
 ## Getting Started
 
 ### Access the Tool
@@ -55,7 +84,13 @@ Replace `{org}` and `{site}` with your DA.live organization and site names.
 
 **Query Parameters:**
 - `ref=local` - Points to your local development server (default port 3000)
-- `ref=main` - Points to your production site
+- `ref=main` - Points to your production site (after deployment)
+
+**Alternative Access (After Registration):**
+
+If you've registered the app in your site config, you can also access it from:
+- DA.live Apps page: `https://da.live/apps#/{org}/{site}` (click the Site Admin card)
+- Direct link with ref: `https://da.live/app/{org}/{site}/tools/admin/siteadmin` (uses production/main by default)
 
 ## Usage Guide
 
@@ -156,15 +191,29 @@ Update existing block documentation with new content examples:
 Connect your AEM as a Cloud Service assets repository:
 
 1. Navigate to "AEM Assets" tab
-2. Enter **Repository ID** - Your AEM assets repository identifier
-3. Enter **Production Origin** - Your AEM production URL
-4. Click "Verify URL" to test the connection
-5. Select desired options:
-   - **Image Type** - Enable image type selection
-   - **Renditions Select** - Allow rendition selection
-   - **DM Delivery** - Dynamic Media delivery
-   - **Smart Crop Select** - Smart crop selection
-6. Click "Save Configuration"
+2. Enter **Repository ID** - Your AEM repository hostname (without `https://`)
+   - Format: `author-pxxxx-eyyyy.adobeaemcloud.com` for author
+   - Format: `delivery-pxxxx-eyyyy.adobeaemcloud.com` for Dynamic Media delivery
+   - Validation happens automatically when you leave the field
+3. Enter **Production Origin** (Optional) - Your production domain (full URL)
+   - Format: `https://mysite.com`
+   - Used to load assets from your custom domain
+   - Validation happens automatically when you leave the field
+4. Select desired options:
+   - **Insert links instead of copying images** - Reference assets via URL
+   - **Allow selecting asset renditions** - Let authors choose specific sizes
+   - **Use Dynamic Media delivery** - Enable Dynamic Media for advanced features
+   - **Enable Smart Crop selection** - Use AI-powered smart cropping
+5. Click "Save Configuration"
+
+**Important Notes:**
+- URLs are automatically validated when you leave each field
+- Repository IDs must be **hostnames only** (no `https://`), e.g., `author-pxxxx-eyyyy.adobeaemcloud.com`
+- Production Origin requires the **full URL** with `https://`, e.g., `https://mysite.com`
+- DA.live automatically adds the `Key` and `Value` column headers when rendering the data sheet
+- Existing configuration is preserved - you'll see an info banner when editing an existing integration
+- All AEM-related settings are stored in the `data` sheet of your site's `config.json`
+- There can only be one AEM Assets integration per site (duplicate keys are automatically replaced)
 
 #### Translation Configuration
 

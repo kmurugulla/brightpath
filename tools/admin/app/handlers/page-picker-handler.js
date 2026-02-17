@@ -1,5 +1,6 @@
 import * as pagesOps from '../../operations/pages.js';
 import * as templates from '../templates.js';
+import { DOM_IDS } from '../constants.js';
 
 // Circular dependency between renderPagePickerModalInternal and attachPagePickerListeners
 // is intentional: modal needs to attach listeners after rendering, and listeners re-render
@@ -21,7 +22,7 @@ export async function validateSite(org, site, token) {
 }
 
 export function closePagePicker(state) {
-  const modalContainer = document.getElementById('page-picker-modal');
+  const modalContainer = document.getElementById(DOM_IDS.PAGE_PICKER_MODAL);
   if (modalContainer) {
     modalContainer.remove();
   }
@@ -57,10 +58,10 @@ function renderPagePickerModalInternal(app, state) {
     mode: state.pagePickerMode,
   });
 
-  let modalContainer = document.getElementById('page-picker-modal');
+  let modalContainer = document.getElementById(DOM_IDS.PAGE_PICKER_MODAL);
   if (!modalContainer) {
     modalContainer = document.createElement('div');
-    modalContainer.id = 'page-picker-modal';
+    modalContainer.id = DOM_IDS.PAGE_PICKER_MODAL;
     document.body.appendChild(modalContainer);
   }
 
@@ -88,7 +89,7 @@ export function attachPagePickerListeners(app, state) {
     confirmBtn.addEventListener('click', () => confirmPageSelection(app, state));
   }
 
-  const searchInput = document.getElementById('page-search');
+  const searchInput = document.getElementById(DOM_IDS.PAGE_SEARCH);
   if (searchInput) {
     searchInput.addEventListener('input', (e) => {
       state.pageSearchQuery = e.target.value;

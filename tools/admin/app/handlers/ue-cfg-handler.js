@@ -1,6 +1,8 @@
+import { DOM_IDS } from '../constants.js';
+
 export function attachUniversalEditorListeners(app, state) {
-  const editorPathInput = document.getElementById('ue-editor-path');
-  const saveConfigBtn = document.getElementById('save-ue-config');
+  const editorPathInput = document.getElementById(DOM_IDS.UE_EDITOR_PATH);
+  const saveConfigBtn = document.getElementById(DOM_IDS.SAVE_UE_CONFIG);
 
   if (editorPathInput) {
     editorPathInput.addEventListener('input', (e) => {

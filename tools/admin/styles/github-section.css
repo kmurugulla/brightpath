@@ -72,7 +72,6 @@
 .preview-notice-link {
   display: inline-block;
   margin-top: var(--spacing-100);
-  color: var(--s2-blue-700);
   font-weight: 600;
   text-decoration: none;
   

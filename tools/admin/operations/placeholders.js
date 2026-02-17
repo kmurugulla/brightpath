@@ -1,7 +1,28 @@
 import { fetchPlaceholdersJSON, updatePlaceholdersJSON } from '../utils/da-api.js';
-import { mergeLibraryItems } from './library-items.js';
+import { mergeLibraryItems, normalizeIdentifier } from './library-items.js';
 
-// eslint-disable-next-line import/prefer-default-export
+export async function removeLibraryPlaceholder(org, site, placeholderKey) {
+  const existingJSON = await fetchPlaceholdersJSON(org, site);
+  const existingData = existingJSON?.data?.data || existingJSON?.data || [];
+  const targetId = normalizeIdentifier(placeholderKey);
+  const merged = existingData.filter(
+    (item) => normalizeIdentifier(item.key) !== targetId,
+  );
+  if (merged.length === existingData.length) {
+    return { success: true, removed: false };
+  }
+  const placeholdersJSON = {
+    ':version': 3,
+    ':type': 'sheet',
+    total: merged.length,
+    limit: merged.length,
+    offset: 0,
+    data: merged,
+  };
+  const updateResult = await updatePlaceholdersJSON(org, site, placeholdersJSON);
+  return { ...updateResult, removed: true };
+}
+
 export async function updateLibraryPlaceholdersJSON(org, site, placeholders) {
   const existingJSON = await fetchPlaceholdersJSON(org, site);
   const existingData = existingJSON?.data?.data || existingJSON?.data || [];

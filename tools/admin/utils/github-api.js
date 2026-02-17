@@ -1,5 +1,20 @@
 import { buildTreeAPIURL, buildContentsAPIURL } from './github-parser.js';
 import TokenStorage from './token-storage.js';
+import { FETCH_TIMEOUT_MS } from '../app/constants.js';
+
+/**
+ * Wrapper around fetch that rejects after `ms` milliseconds.
+ * @param {string} url
+ * @param {RequestInit} options
+ * @param {number} [ms]
+ * @returns {Promise<Response>}
+ */
+function fetchWithTimeout(url, options = {}, ms = FETCH_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return fetch(url, { ...options, signal: controller.signal })
+    .finally(() => clearTimeout(timer));
+}
 
 export default class GitHubAPI {
   constructor(org, repo, branch = 'main', token = null) {
@@ -24,7 +39,7 @@ export default class GitHubAPI {
 
   async validateAccess() {
     try {
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         `https://api.github.com/repos/${this.org}/${this.repo}`,
         { headers: GitHubAPI.getHeaders(this.token) },
       );
@@ -96,7 +111,7 @@ export default class GitHubAPI {
   async discoverBlocks() {
     try {
       const url = buildTreeAPIURL(this.org, this.repo, this.branch);
-      const response = await fetch(url, { headers: GitHubAPI.getHeaders(this.token) });
+      const response = await fetchWithTimeout(url, { headers: GitHubAPI.getHeaders(this.token) });
 
       if (!response.ok) {
         if (response.status === 403) {
@@ -141,7 +156,7 @@ export default class GitHubAPI {
   async fetchFileContents(path) {
     try {
       const url = buildContentsAPIURL(this.org, this.repo, path, this.branch);
-      const response = await fetch(url, { headers: GitHubAPI.getHeaders(this.token) });
+      const response = await fetchWithTimeout(url, { headers: GitHubAPI.getHeaders(this.token) });
 
       if (!response.ok) {
         throw new Error(`Failed to fetch file ${path}: ${response.status}`);
