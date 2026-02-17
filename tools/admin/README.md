@@ -23,60 +23,54 @@ The Blocks view (Library Setup vs Update Examples) with block selection and samp
 
 ## Installation
 
-**Important:** Run these commands from your project root (where the `tools/` folder should be created or updated).
+### Option 1: Use the shared app (recommended)
 
-### Option 1: Using npx (Recommended)
+No code to pull. Any site can use the tool by adding one app row to its config; the app is served from this project.
 
-```bash
-npx degit kmurugulla/brightpath/tools/admin tools/admin
-```
-
-### Option 2: Using curl
-
-```bash
-curl -L https://github.com/kmurugulla/brightpath/archive/refs/heads/main.tar.gz | \
-  tar -xz --strip=3 "brightpath-main/tools/admin" && \
-  mv admin tools/
-```
-
-### Option 3: Manual Copy
-
-Copy the entire `tools/admin` directory into your project's `tools/` folder.
-
-### Register as Site App (Recommended)
-
-After installation, register the Site Admin tool in your DA.live site configuration to make it easily accessible from the Apps page.
-
-1. Navigate to your site config: `https://da.live/config#/{org}/{site}/`
-2. Switch to the **apps** sheet (or create one if it doesn't exist)
-3. Add a new row with the following values:
+1. Open your site config: `https://da.live/config#/{org}/{site}/`
+2. Open or create the **apps** sheet.
+3. Add a row with:
 
 | Column | Value |
 |--------|-------|
 | **title** | `Site Admin` |
 | **description** | `Visual interface for configuring site` |
-| **image** | `https://milostudio--milo--adobecom.aem.live/img/tools/search.jpg` (or your own image URL) |
-| **path** | `https://da.live/app/{org}/{site}/tools/admin/siteadmin` |
-| **ref** | `local` (for development) or leave empty (for production) |
+| **image** | `https://main--brightpath--kmurugulla.aem.live/tools/admin/siteadmin.jpg` |
+| **path** | `https://da.live/app/kmurugulla/brightpath/tools/admin/siteadmin?org=YOUR_ORG&site=YOUR_SITE` |
 
-4. Replace `{org}` with your organization name (e.g., `kmurugulla`)
-5. Replace `{site}` with your site name (e.g., `brightpath`)
-6. Save the configuration
+4. Replace `YOUR_ORG` and `YOUR_SITE` with your organization and site (e.g. `myorg`, `mysite`).
+5. Save the config.
 
-**Example:**
-- Organization: `myorg`
-- Site: `mysite`
-- Path: `https://da.live/app/myorg/mysite/tools/admin/siteadmin`
+The app will show up on your Apps page at `https://da.live/apps#/{org}/{site}`. No clone or deploy needed.
 
-Once registered, the Site Admin tool will appear as a card on your DA.live Apps page at `https://da.live/apps#/{org}/{site}`.
+### Option 2: Pull the code
 
-For more information about developing and registering DA.live apps, see the [official documentation](https://docs.da.live/developers/guides/developing-apps-and-plugins).
+Use this if you want to run or customize the tool in your own repo.
+
+From your project root:
+
+```bash
+npx degit kmurugulla/brightpath/tools/admin tools/admin
+```
+
+Or with curl:
+
+```bash
+curl -L https://github.com/kmurugulla/brightpath/archive/refs/heads/main.tar.gz | \
+  tar -xz --strip=3 "brightpath-main/tools/admin" && mv admin tools/
+```
+
+Then register it in your site config: set **path** to `https://da.live/app/{org}/{site}/tools/admin/siteadmin`, and use **ref** `local` (development) or leave empty (production after you deploy).
+
+For more on DA.live apps, see the [official documentation](https://docs.da.live/developers/guides/developing-apps-and-plugins).
 
 ## Getting Started
 
 ### Access the Tool
 
-Run your local development server:
+**If you used Option 1 (shared app):** Open `https://da.live/apps#/{org}/{site}` and click the Site Admin card.
+
+**If you pulled the code (Option 2):** Run your local development server:
 ```bash
 aem up
 ```
@@ -88,15 +82,11 @@ https://da.live/app/{org}/{site}/tools/admin/siteadmin?ref=local
 
 Replace `{org}` and `{site}` with your DA.live organization and site names.
 
-**Query Parameters:**
-- `ref=local` - Points to your local development server (default port 3000)
-- `ref=main` - Points to your production site (after deployment)
+**Query parameters (Option 2 only):**
+- `ref=local` – use your local dev server (port 3000)
+- `ref=main` – use production after deploy
 
-**Alternative Access (After Registration):**
-
-If you've registered the app in your site config, you can also access it from:
-- DA.live Apps page: `https://da.live/apps#/{org}/{site}` (click the Site Admin card)
-- Direct link with ref: `https://da.live/app/{org}/{site}/tools/admin/siteadmin` (uses production/main by default)
+After registering the app in your site config, you can also open it from the Apps page: `https://da.live/apps#/{org}/{site}`.
 
 ## Usage Guide
 
