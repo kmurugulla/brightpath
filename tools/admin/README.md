@@ -2,6 +2,12 @@
 
 Comprehensive administration console for managing DA.live sites - library setup, integrations, and site configuration.
 
+## Overview
+
+The Blocks view (Library Setup vs Update Examples) with block selection and sample pages:
+
+![Blocks – Library management](screenshot-blocks.png)
+
 ## Features
 
 ### Library Management
