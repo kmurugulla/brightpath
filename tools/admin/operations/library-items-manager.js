@@ -1,13 +1,14 @@
 import * as daApi from '../utils/da-api.js';
+import { getSheetDataArray } from '../utils/sheet-json.js';
 
 export async function fetchExistingTemplates(org, site) {
   try {
     const json = await daApi.fetchTemplatesJSON(org, site);
-    const data = json?.data?.data || json?.data || [];
-    return data.map((item) => ({
+    const data = getSheetDataArray(json);
+    return Array.isArray(data) ? data.map((item) => ({
       name: item.key,
       path: item.value,
-    }));
+    })) : [];
   } catch (error) {
     return [];
   }
@@ -16,11 +17,11 @@ export async function fetchExistingTemplates(org, site) {
 export async function fetchExistingIcons(org, site) {
   try {
     const json = await daApi.fetchIconsJSON(org, site);
-    const data = json?.data?.data || json?.data || [];
-    return data.map((item) => ({
+    const data = getSheetDataArray(json);
+    return Array.isArray(data) ? data.map((item) => ({
       name: item.key,
       path: item.icon,
-    }));
+    })) : [];
   } catch (error) {
     return [];
   }
@@ -29,11 +30,11 @@ export async function fetchExistingIcons(org, site) {
 export async function fetchExistingPlaceholders(org, site) {
   try {
     const json = await daApi.fetchPlaceholdersJSON(org, site);
-    const data = json?.data?.data || json?.data || [];
-    return data.map((item) => ({
+    const data = getSheetDataArray(json);
+    return Array.isArray(data) ? data.map((item) => ({
       key: item.value,
       value: item.key,
-    }));
+    })) : [];
   } catch (error) {
     return [];
   }

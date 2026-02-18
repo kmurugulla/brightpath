@@ -44,15 +44,6 @@ const app = {
     const queryOrg = params.get('org');
     const querySite = params.get('site');
 
-    // eslint-disable-next-line no-console
-    console.log('[Site Admin] URL', {
-      search: window.location.search || '(empty)',
-      hash: window.location.hash || '(empty)',
-      searchString: searchString || '(empty)',
-      queryOrg: queryOrg || '(missing)',
-      querySite: querySite || '(missing)',
-    });
-
     let source = '';
     if (queryOrg && querySite) {
       source = 'query';
@@ -95,14 +86,6 @@ const app = {
         // no token – API calls will 401
       }
     }
-
-    // eslint-disable-next-line no-console
-    console.log('[Site Admin] org/site source:', source || '(none)', {
-      org: state.org,
-      site: state.site,
-      repo: state.repo,
-      hasToken: Boolean(state.daToken),
-    });
 
     if (TokenStorage.exists()) {
       state.githubToken = TokenStorage.get();

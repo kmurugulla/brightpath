@@ -4,17 +4,15 @@ import {
   updateBlocksJSON,
   batchUploadBlocks,
 } from '../utils/da-api.js';
+import { getSheetDataArray } from '../utils/sheet-json.js';
 import { generateBlockHTML, generateBlocksJSON } from '../utils/doc-generator.js';
 import extractExamplesWithProgress from '../utils/content-extract.js';
 import { analyzeBlock } from '../utils/block-analysis.js';
 import { getContentBlockPath } from '../config.js';
 
-// Prefer "data" sheet (our doc-generator); if not found, use "blocks" sheet (DA)
-function getBlocksArray(blocksJSON) {
-  const data = blocksJSON?.data?.data
-    || blocksJSON?.data
-    || blocksJSON?.blocks?.data
-    || [];
+/** Resolve blocks array from sheet JSON using :names (any sheet name: data, blocks, bla, etc.) */
+export function getBlocksArray(blocksJSON) {
+  const data = getSheetDataArray(blocksJSON);
   return Array.isArray(data) ? data : [];
 }
 
@@ -25,7 +23,7 @@ export async function checkLibraryExists(org, site) {
     const blocksArray = getBlocksArray(blocksJSON);
     return {
       exists: true,
-      count: blocksJSON.blocks?.total ?? blocksJSON.data?.total ?? blocksArray.length,
+      count: blocksArray.length,
     };
   } catch (error) {
     return { exists: false, count: 0 };
@@ -33,25 +31,12 @@ export async function checkLibraryExists(org, site) {
 }
 
 export async function fetchExistingBlocks(org, site) {
-  // eslint-disable-next-line no-console
-  console.log('[Site Admin] fetchExistingBlocks', { org, site });
   const blocksJSON = await fetchBlocksJSON(org, site);
-  const dataObj = blocksJSON?.data;
-  const dataKeys = dataObj && typeof dataObj === 'object' ? Object.keys(dataObj) : [];
   const blocksArray = getBlocksArray(blocksJSON);
-  // eslint-disable-next-line no-console
-  console.log('[Site Admin] fetchBlocksJSON response', {
-    isNull: blocksJSON === null,
-    keys: blocksJSON ? Object.keys(blocksJSON) : [],
-    dataKeys,
-    dataDataType: dataObj?.data != null ? typeof dataObj.data : 'n/a',
-    blocksCount: blocksArray.length,
-    sample: blocksArray.slice(0, 2),
-  });
   if (blocksJSON && blocksArray.length > 0) {
     const autoBlocks = new Set(['header', 'footer', 'fragment']);
 
-    const out = blocksArray
+    return blocksArray
       .filter((block) => {
         const pathParts = block.path.split('/');
         const kebabName = pathParts[pathParts.length - 1];
@@ -62,12 +47,7 @@ export async function fetchExistingBlocks(org, site) {
         path: block.path,
         isAutoBlock: false,
       }));
-    // eslint-disable-next-line no-console
-    console.log('[Site Admin] fetchExistingBlocks returning', { count: out.length, names: out.map((b) => b.name) });
-    return out;
   }
-  // eslint-disable-next-line no-console
-  console.log('[Site Admin] fetchExistingBlocks returning [] (no data)');
   return [];
 }
 

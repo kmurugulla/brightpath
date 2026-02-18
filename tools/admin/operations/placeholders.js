@@ -1,9 +1,10 @@
 import { fetchPlaceholdersJSON, updatePlaceholdersJSON } from '../utils/da-api.js';
+import { getSheetDataArray } from '../utils/sheet-json.js';
 import { mergeLibraryItems, normalizeIdentifier } from './library-items.js';
 
 export async function removeLibraryPlaceholder(org, site, placeholderKey) {
   const existingJSON = await fetchPlaceholdersJSON(org, site);
-  const existingData = existingJSON?.data?.data || existingJSON?.data || [];
+  const existingData = getSheetDataArray(existingJSON);
   const targetId = normalizeIdentifier(placeholderKey);
   const merged = existingData.filter(
     (item) => normalizeIdentifier(item.key) !== targetId,
@@ -25,7 +26,7 @@ export async function removeLibraryPlaceholder(org, site, placeholderKey) {
 
 export async function updateLibraryPlaceholdersJSON(org, site, placeholders) {
   const existingJSON = await fetchPlaceholdersJSON(org, site);
-  const existingData = existingJSON?.data?.data || existingJSON?.data || [];
+  const existingData = getSheetDataArray(existingJSON);
 
   const normalizedNew = placeholders.map((p) => ({
     key: p.value,

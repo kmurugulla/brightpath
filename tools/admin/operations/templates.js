@@ -2,11 +2,12 @@ import {
   fetchTemplatesJSON,
   updateTemplatesJSON,
 } from '../utils/da-api.js';
+import { getSheetDataArray } from '../utils/sheet-json.js';
 import { mergeLibraryItems, normalizeIdentifier } from './library-items.js';
 
 export async function removeLibraryTemplate(org, site, templateKey) {
   const existingJSON = await fetchTemplatesJSON(org, site);
-  const existingData = existingJSON?.data?.data || existingJSON?.data || [];
+  const existingData = getSheetDataArray(existingJSON);
   const targetId = normalizeIdentifier(templateKey);
   const merged = existingData.filter(
     (item) => normalizeIdentifier(item.key) !== targetId,
@@ -29,7 +30,7 @@ export async function removeLibraryTemplate(org, site, templateKey) {
 // eslint-disable-next-line import/prefer-default-export
 export async function updateLibraryTemplatesJSON(org, site, templates) {
   const existingJSON = await fetchTemplatesJSON(org, site);
-  const existingData = existingJSON?.data?.data || existingJSON?.data || [];
+  const existingData = getSheetDataArray(existingJSON);
 
   const normalizedNew = templates.map((template) => {
     let templatePath = template.path.replace(/\.html$/, '');

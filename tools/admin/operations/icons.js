@@ -1,9 +1,10 @@
 import { fetchIconsJSON, updateIconsJSON } from '../utils/da-api.js';
+import { getSheetDataArray } from '../utils/sheet-json.js';
 import { mergeLibraryItems, normalizeIdentifier } from './library-items.js';
 
 export async function removeLibraryIcon(org, site, iconKey) {
   const existingJSON = await fetchIconsJSON(org, site);
-  const existingData = existingJSON?.data?.data || existingJSON?.data || [];
+  const existingData = getSheetDataArray(existingJSON);
   const targetId = normalizeIdentifier(iconKey);
   const merged = existingData.filter(
     (item) => normalizeIdentifier(item.key) !== targetId,
@@ -26,7 +27,7 @@ export async function removeLibraryIcon(org, site, iconKey) {
 // eslint-disable-next-line import/prefer-default-export
 export async function updateLibraryIconsJSON(org, site, icons) {
   const existingJSON = await fetchIconsJSON(org, site);
-  const existingData = existingJSON?.data?.data || existingJSON?.data || [];
+  const existingData = getSheetDataArray(existingJSON);
 
   const normalizedNew = icons.map((icon) => {
     let iconPath = icon.path;
