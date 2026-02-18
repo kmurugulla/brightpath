@@ -24,6 +24,9 @@ import * as libraryOps from '../operations/library.js';
 import { removeLibraryTemplate } from '../operations/templates.js';
 import { removeLibraryIcon } from '../operations/icons.js';
 import { removeLibraryPlaceholder } from '../operations/placeholders.js';
+import sampleRUM from '../measure.js';
+
+let lastReportedView = null;
 
 const app = {
   async init() {
@@ -54,6 +57,10 @@ const app = {
 
     if (TokenStorage.exists()) {
       state.githubToken = TokenStorage.get();
+    }
+
+    if (state.org && state.site) {
+      sampleRUM('admin-load', { org: state.org, site: state.site });
     }
 
     this.container = container;
@@ -431,6 +438,10 @@ const app = {
 
   async render() {
     const route = getCurrentRoute();
+    if (state.org && state.site && route && route !== lastReportedView) {
+      lastReportedView = route;
+      sampleRUM('admin-view', { org: state.org, site: state.site, view: route });
+    }
     const viewMap = {
       [ROUTES.BLOCKS]: () => this.renderBlocksView(),
       [ROUTES.TEMPLATES]: () => this.renderTemplatesView(),
