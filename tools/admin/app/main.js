@@ -86,11 +86,22 @@ const app = {
       }
     }
 
+    // Token required for admin.da.live API; get it even when org/site came from query
+    if (!state.daToken) {
+      try {
+        const { token } = await DA_SDK;
+        state.daToken = token;
+      } catch (error) {
+        // no token – API calls will 401
+      }
+    }
+
     // eslint-disable-next-line no-console
     console.log('[Site Admin] org/site source:', source || '(none)', {
       org: state.org,
       site: state.site,
       repo: state.repo,
+      hasToken: Boolean(state.daToken),
     });
 
     if (TokenStorage.exists()) {
