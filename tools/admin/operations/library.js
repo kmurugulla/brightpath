@@ -9,9 +9,10 @@ import extractExamplesWithProgress from '../utils/content-extract.js';
 import { analyzeBlock } from '../utils/block-analysis.js';
 import { getContentBlockPath } from '../config.js';
 
+// Same row-array resolution as templates/icons/placeholders (library-items-manager)
 function getBlocksArray(blocksJSON) {
-  const arr = blocksJSON?.data?.data ?? (Array.isArray(blocksJSON?.data) ? blocksJSON.data : null);
-  return Array.isArray(arr) ? arr : [];
+  const data = blocksJSON?.data?.data || blocksJSON?.data || [];
+  return Array.isArray(data) ? data : [];
 }
 
 export async function checkLibraryExists(org, site) {
@@ -32,18 +33,18 @@ export async function fetchExistingBlocks(org, site) {
   // eslint-disable-next-line no-console
   console.log('[Site Admin] fetchExistingBlocks', { org, site });
   const blocksJSON = await fetchBlocksJSON(org, site);
-  const rawData = blocksJSON?.data?.data ?? blocksJSON?.data;
-  const isArray = Array.isArray(rawData);
+  const dataObj = blocksJSON?.data;
+  const dataKeys = dataObj && typeof dataObj === 'object' ? Object.keys(dataObj) : [];
+  const blocksArray = getBlocksArray(blocksJSON);
   // eslint-disable-next-line no-console
   console.log('[Site Admin] fetchBlocksJSON response', {
     isNull: blocksJSON === null,
     keys: blocksJSON ? Object.keys(blocksJSON) : [],
-    hasDataData: Boolean(blocksJSON?.data?.data),
-    hasDataArray: Boolean(blocksJSON?.data && Array.isArray(blocksJSON.data)),
-    rawCount: isArray ? rawData.length : 0,
-    sample: isArray ? rawData.slice(0, 2) : null,
+    dataKeys,
+    dataDataType: dataObj?.data != null ? typeof dataObj.data : 'n/a',
+    blocksCount: blocksArray.length,
+    sample: blocksArray.slice(0, 2),
   });
-  const blocksArray = getBlocksArray(blocksJSON);
   if (blocksJSON && blocksArray.length > 0) {
     const autoBlocks = new Set(['header', 'footer', 'fragment']);
 
