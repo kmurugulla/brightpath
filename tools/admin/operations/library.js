@@ -9,9 +9,12 @@ import extractExamplesWithProgress from '../utils/content-extract.js';
 import { analyzeBlock } from '../utils/block-analysis.js';
 import { getContentBlockPath } from '../config.js';
 
-// Same row-array resolution as templates/icons/placeholders (library-items-manager)
+// Prefer "data" sheet (our doc-generator); if not found, use "blocks" sheet (DA)
 function getBlocksArray(blocksJSON) {
-  const data = blocksJSON?.data?.data || blocksJSON?.data || [];
+  const data = blocksJSON?.data?.data
+    || blocksJSON?.data
+    || blocksJSON?.blocks?.data
+    || [];
   return Array.isArray(data) ? data : [];
 }
 
@@ -22,7 +25,7 @@ export async function checkLibraryExists(org, site) {
     const blocksArray = getBlocksArray(blocksJSON);
     return {
       exists: true,
-      count: blocksJSON.data?.total ?? blocksArray.length,
+      count: blocksJSON.blocks?.total ?? blocksJSON.data?.total ?? blocksArray.length,
     };
   } catch (error) {
     return { exists: false, count: 0 };
