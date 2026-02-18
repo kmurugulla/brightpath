@@ -35,12 +35,30 @@ const app = {
       throw new Error('App container not found');
     }
 
-    const params = new URLSearchParams(window.location.search);
+    // Prefer org/site from query; host (e.g. Nx Shell) may strip search so also check hash
+    const hashQuery = window.location.hash && window.location.hash.includes('?')
+      ? window.location.hash.split('?')[1] || ''
+      : '';
+    const searchString = window.location.search || hashQuery;
+    const params = new URLSearchParams(searchString);
     const queryOrg = params.get('org');
     const querySite = params.get('site');
+
+    // eslint-disable-next-line no-console
+    console.log('[Site Admin] URL', {
+      search: window.location.search || '(empty)',
+      hash: window.location.hash || '(empty)',
+      searchString: searchString || '(empty)',
+      queryOrg: queryOrg || '(missing)',
+      querySite: querySite || '(missing)',
+    });
+
+    let source = '';
     if (queryOrg && querySite) {
+      source = 'query';
       state.org = queryOrg;
       state.site = querySite;
+      state.repo = querySite;
     } else {
       try {
         const { context, token } = await DA_SDK;
@@ -53,15 +71,27 @@ const app = {
         if (context?.repo) {
           state.site = context.repo;
         }
+        if (state.org || state.site) {
+          source = 'da_sdk';
+        }
       } catch (error) {
         const urlMatch = window.location.pathname.match(/^\/app\/([^/]+)\/([^/]+)/);
         if (urlMatch) {
+          source = 'path';
           const [, org, site] = urlMatch;
           state.org = org;
           state.site = site;
+          state.repo = site;
         }
       }
     }
+
+    // eslint-disable-next-line no-console
+    console.log('[Site Admin] org/site source:', source || '(none)', {
+      org: state.org,
+      site: state.site,
+      repo: state.repo,
+    });
 
     if (TokenStorage.exists()) {
       state.githubToken = TokenStorage.get();
