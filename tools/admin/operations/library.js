@@ -4,7 +4,7 @@ import {
   updateBlocksJSON,
   batchUploadBlocks,
 } from '../utils/da-api.js';
-import { getSheetDataArray } from '../utils/sheet-json.js';
+import getSheetDataArray from '../utils/sheet-json.js';
 import { generateBlockHTML, generateBlocksJSON } from '../utils/doc-generator.js';
 import extractExamplesWithProgress from '../utils/content-extract.js';
 import { analyzeBlock } from '../utils/block-analysis.js';

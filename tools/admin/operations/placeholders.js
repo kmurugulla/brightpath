@@ -1,5 +1,5 @@
 import { fetchPlaceholdersJSON, updatePlaceholdersJSON } from '../utils/da-api.js';
-import { getSheetDataArray } from '../utils/sheet-json.js';
+import getSheetDataArray from '../utils/sheet-json.js';
 import { mergeLibraryItems, normalizeIdentifier } from './library-items.js';
 
 export async function removeLibraryPlaceholder(org, site, placeholderKey) {

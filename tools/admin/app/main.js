@@ -44,9 +44,7 @@ const app = {
     const queryOrg = params.get('org');
     const querySite = params.get('site');
 
-    let source = '';
     if (queryOrg && querySite) {
-      source = 'query';
       state.org = queryOrg;
       state.site = querySite;
       state.repo = querySite;
@@ -63,12 +61,11 @@ const app = {
           state.site = context.repo;
         }
         if (state.org || state.site) {
-          source = 'da_sdk';
+          // org/site from DA SDK
         }
       } catch (error) {
         const urlMatch = window.location.pathname.match(/^\/app\/([^/]+)\/([^/]+)/);
         if (urlMatch) {
-          source = 'path';
           const [, org, site] = urlMatch;
           state.org = org;
           state.site = site;

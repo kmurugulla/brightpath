@@ -228,8 +228,64 @@ export async function fetchSiteConfig(org, site) {
   }
 }
 
-async function checkBlockDocExists(org, site, blockName) {
-  const path = `/${org}/${site}/library/blocks/${blockName}`;
+const LIBRARY_TYPE_FILENAMES = {
+  Blocks: 'blocks.json',
+  Templates: 'templates.json',
+  Icons: 'icons.json',
+  Placeholders: 'placeholders.json',
+};
+
+const LIBRARY_TYPE_DEFAULTS = {
+  Blocks: (org, site) => `${org}/${site}/library/blocks.json`,
+  Templates: (org, site) => `${org}/${site}/library/templates.json`,
+  Icons: (org, site) => `${org}/${site}/library/icons.json`,
+  Placeholders: (org, site) => `${org}/${site}/placeholders.json`,
+};
+
+/** Derive library base dir from path (e.g. '.../library/blocks.json' -> '.../library') */
+function getLibraryBaseFromPath(pathStr) {
+  if (!pathStr || typeof pathStr !== 'string') return null;
+  const withoutHost = pathStr.replace(/^https:\/\/[^/]+/i, '').replace(/^\//, '');
+  const parts = withoutHost.split('/').filter(Boolean);
+  if (parts.length < 2) return null;
+  parts.pop();
+  return parts.join('/');
+}
+
+/**
+ * Resolve path for a library type from site config, or default.
+ * @param {string} org
+ * @param {string} site
+ * @param {'Blocks'|'Templates'|'Icons'|'Placeholders'} type
+ * @returns {Promise<string>} Path for DA source API (e.g. 'org/site/docs/library/blocks.json')
+ */
+export async function getLibraryPathForType(org, site, type) {
+  const config = await fetchSiteConfig(org, site);
+  const entry = config?.library?.data?.find((e) => e.title === type);
+  if (entry?.path) {
+    return entry.path.replace(/^https:\/\/content\.da\.live\/?/i, '').replace(/^\//, '');
+  }
+  const anyEntry = config?.library?.data?.find((e) => e?.path);
+  if (anyEntry?.path) {
+    const base = getLibraryBaseFromPath(anyEntry.path);
+    const filename = LIBRARY_TYPE_FILENAMES[type];
+    if (base && filename) return `${base}/${filename}`;
+  }
+  return LIBRARY_TYPE_DEFAULTS[type](org, site);
+}
+
+/**
+ * Resolve library base directory from config (any configured type), or default.
+ * @returns {Promise<string>} e.g. 'org/site/docs/library' or 'org/site/library'
+ */
+export async function getLibraryBase(org, site) {
+  const pathForBlocks = await getLibraryPathForType(org, site, 'Blocks');
+  const base = getLibraryBaseFromPath(pathForBlocks);
+  return base || `${org}/${site}/library`;
+}
+
+async function checkBlockDocExists(blocksDirPath, blockName) {
+  const path = `${blocksDirPath}/${blockName}`;
   const url = `${DA_ADMIN}/source${path}.html`;
 
   try {
@@ -240,8 +296,8 @@ async function checkBlockDocExists(org, site, blockName) {
   }
 }
 
-async function createBlockDocVersion(org, site, blockName) {
-  const path = `/${org}/${site}/library/blocks/${blockName}`;
+async function createBlockDocVersion(blocksDirPath, blockName) {
+  const path = `${blocksDirPath}/${blockName}`;
   const url = `${DA_ADMIN}/versionsource${path}.html`;
 
   try {
@@ -253,13 +309,15 @@ async function createBlockDocVersion(org, site, blockName) {
 }
 
 export async function uploadBlockDoc(org, site, blockName, htmlContent) {
-  const path = `/${org}/${site}/library/blocks/${blockName}`;
+  const base = await getLibraryBase(org, site);
+  const blocksDirPath = `/${base}/blocks`;
+  const path = `${blocksDirPath}/${blockName}`;
   const url = `${DA_ADMIN}/source${path}.html`;
 
   try {
-    const exists = await checkBlockDocExists(org, site, blockName);
+    const exists = await checkBlockDocExists(blocksDirPath, blockName);
     if (exists) {
-      await createBlockDocVersion(org, site, blockName);
+      await createBlockDocVersion(blocksDirPath, blockName);
     }
 
     const formData = new FormData();
@@ -290,16 +348,7 @@ export async function uploadBlockDoc(org, site, blockName, htmlContent) {
 }
 
 export async function fetchBlocksJSON(org, site) {
-  let path = `${org}/${site}/library/blocks.json`;
-
-  const config = await fetchSiteConfig(org, site);
-  if (config?.library?.data) {
-    const blocksEntry = config.library.data.find((entry) => entry.title === 'Blocks');
-    if (blocksEntry?.path) {
-      path = blocksEntry.path.replace('https://content.da.live/', '');
-    }
-  }
-
+  const path = await getLibraryPathForType(org, site, 'Blocks');
   const url = `${DA_ADMIN}/source/${path}`;
 
   try {
@@ -320,16 +369,7 @@ export async function fetchBlocksJSON(org, site) {
 }
 
 export async function updateBlocksJSON(org, site, config) {
-  let path = `${org}/${site}/library/blocks.json`;
-
-  const siteConfig = await fetchSiteConfig(org, site);
-  if (siteConfig?.library?.data) {
-    const blocksEntry = siteConfig.library.data.find((entry) => entry.title === 'Blocks');
-    if (blocksEntry?.path) {
-      path = blocksEntry.path.replace('https://content.da.live/', '');
-    }
-  }
-
+  const path = await getLibraryPathForType(org, site, 'Blocks');
   const url = `${DA_ADMIN}/source/${path}`;
 
   try {
@@ -553,17 +593,12 @@ export async function registerLibrary(org, site) {
           config.library.limit = libraryData.length;
           wasCreated = true;
         } else {
-          const existingPath = libraryData[blocksIndex].path;
-          if (existingPath === blocksPath) {
-            return {
-              success: true,
-              created: false,
-              error: null,
-            };
-          }
-
-          libraryData[blocksIndex].path = blocksPath;
-          config.library.data = libraryData;
+          // Blocks already configured; keep existing path (e.g. docs/library) - do not overwrite
+          return {
+            success: true,
+            created: false,
+            error: null,
+          };
         }
       }
     } else {
@@ -609,7 +644,6 @@ export async function registerLibrary(org, site) {
 export async function registerTemplatesInConfig(org, site) {
   try {
     const config = await fetchSiteConfig(org, site);
-    const templatesPath = `${CONTENT_DA_LIVE_BASE}/${org}/${site}/library/templates.json`;
 
     if (!config || !config.library) {
       return {
@@ -617,6 +651,9 @@ export async function registerTemplatesInConfig(org, site) {
         error: 'Site config not initialized. Run Blocks setup first.',
       };
     }
+
+    const pathSegment = await getLibraryPathForType(org, site, 'Templates');
+    const templatesPath = `${CONTENT_DA_LIVE_BASE}/${pathSegment}`;
 
     const libraryData = config.library.data || [];
     const templatesIndex = libraryData.findIndex((entry) => entry.title === 'Templates');
@@ -650,9 +687,10 @@ export async function registerTemplatesInConfig(org, site) {
 }
 
 export async function uploadTemplateDoc(org, site, templateName, sourcePath) {
+  const base = await getLibraryBase(org, site);
   const sourceUrl = `${DA_ADMIN}/source/${org}/${site}${sourcePath}.html`;
-  const targetPath = `/${org}/${site}/library/templates/${templateName}`;
-  const targetUrl = `${DA_ADMIN}/source${targetPath}.html`;
+  const targetPath = `/${base}/templates/${templateName}`;
+  const targetUrl = `${DA_ADMIN}/source/${targetPath}.html`;
 
   try {
     const sourceResponse = await daFetch(sourceUrl);
@@ -690,7 +728,7 @@ export async function uploadTemplateDoc(org, site, templateName, sourcePath) {
 }
 
 export async function fetchTemplatesJSON(org, site) {
-  const path = `${org}/${site}/library/templates.json`;
+  const path = await getLibraryPathForType(org, site, 'Templates');
   const url = `${DA_ADMIN}/source/${path}`;
 
   try {
@@ -711,7 +749,7 @@ export async function fetchTemplatesJSON(org, site) {
 }
 
 export async function updateTemplatesJSON(org, site, config) {
-  const path = `${org}/${site}/library/templates.json`;
+  const path = await getLibraryPathForType(org, site, 'Templates');
   const url = `${DA_ADMIN}/source/${path}`;
 
   try {
@@ -741,7 +779,7 @@ export async function updateTemplatesJSON(org, site, config) {
 }
 
 export async function fetchIconsJSON(org, site) {
-  const path = `${org}/${site}/library/icons.json`;
+  const path = await getLibraryPathForType(org, site, 'Icons');
   const url = `${DA_ADMIN}/source/${path}`;
 
   try {
@@ -762,7 +800,7 @@ export async function fetchIconsJSON(org, site) {
 }
 
 export async function updateIconsJSON(org, site, config) {
-  const path = `${org}/${site}/library/icons.json`;
+  const path = await getLibraryPathForType(org, site, 'Icons');
   const url = `${DA_ADMIN}/source/${path}`;
 
   try {
@@ -792,8 +830,9 @@ export async function updateIconsJSON(org, site, config) {
 }
 
 export async function uploadIconDoc(org, site, iconName, sourcePath) {
+  const base = await getLibraryBase(org, site);
   const sourceUrl = `${DA_ADMIN}/source/${org}/${site}${sourcePath}`;
-  const targetPath = `/${org}/${site}/library/icons/${iconName}`;
+  const targetPath = `/${base}/icons/${iconName}`;
   const targetUrl = `${DA_ADMIN}/source${targetPath}.svg`;
 
   try {
@@ -832,7 +871,7 @@ export async function uploadIconDoc(org, site, iconName, sourcePath) {
 }
 
 export async function fetchPlaceholdersJSON(org, site) {
-  const path = `${org}/${site}/placeholders.json`;
+  const path = await getLibraryPathForType(org, site, 'Placeholders');
   const url = `${DA_ADMIN}/source/${path}`;
 
   try {
@@ -853,7 +892,7 @@ export async function fetchPlaceholdersJSON(org, site) {
 }
 
 export async function updatePlaceholdersJSON(org, site, config) {
-  const path = `${org}/${site}/placeholders.json`;
+  const path = await getLibraryPathForType(org, site, 'Placeholders');
   const url = `${DA_ADMIN}/source/${path}`;
 
   try {
@@ -885,7 +924,6 @@ export async function updatePlaceholdersJSON(org, site, config) {
 export async function registerIconsInConfig(org, site) {
   try {
     const config = await fetchSiteConfig(org, site);
-    const iconsPath = `${CONTENT_DA_LIVE_BASE}/${org}/${site}/library/icons.json`;
 
     if (!config || !config.library) {
       return {
@@ -893,6 +931,9 @@ export async function registerIconsInConfig(org, site) {
         error: 'Site config not initialized. Run Blocks setup first.',
       };
     }
+
+    const pathSegment = await getLibraryPathForType(org, site, 'Icons');
+    const iconsPath = `${CONTENT_DA_LIVE_BASE}/${pathSegment}`;
 
     const libraryData = config.library.data || [];
     const iconsIndex = libraryData.findIndex((entry) => entry.title === 'Icons');
@@ -930,7 +971,6 @@ export async function registerIconsInConfig(org, site) {
 export async function registerPlaceholdersInConfig(org, site) {
   try {
     const config = await fetchSiteConfig(org, site);
-    const placeholdersPath = `${CONTENT_DA_LIVE_BASE}/${org}/${site}/placeholders.json`;
 
     if (!config || !config.library) {
       return {
@@ -938,6 +978,9 @@ export async function registerPlaceholdersInConfig(org, site) {
         error: 'Site config not initialized. Run Blocks setup first.',
       };
     }
+
+    const pathSegment = await getLibraryPathForType(org, site, 'Placeholders');
+    const placeholdersPath = `${CONTENT_DA_LIVE_BASE}/${pathSegment}`;
 
     const libraryData = config.library.data || [];
     const placeholdersIndex = libraryData.findIndex((entry) => entry.title === 'Placeholders');

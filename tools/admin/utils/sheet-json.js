@@ -5,18 +5,25 @@
  * @param {string[]} [excludeNames=['options']] - Sheet names to skip (e.g. options)
  * @returns {unknown[]} The data array, or [] if none found
  */
-export function getSheetDataArray(json, excludeNames = ['options']) {
+function getSheetDataArray(json, excludeNames = ['options']) {
   const names = json?.[':names'];
   if (Array.isArray(names)) {
-    for (const name of names) {
-      if (excludeNames.includes(name)) continue;
+    const firstValid = names.find((name) => {
+      if (excludeNames.includes(name)) return false;
       const sheet = json[name];
-      if (sheet == null) continue;
+      if (sheet == null) return false;
       const arr = sheet?.data ?? (Array.isArray(sheet) ? sheet : null);
-      if (Array.isArray(arr)) return arr;
+      return Array.isArray(arr);
+    });
+    if (firstValid != null) {
+      const sheet = json[firstValid];
+      const arr = sheet?.data ?? (Array.isArray(sheet) ? sheet : null);
+      return arr;
     }
     return [];
   }
   const fallback = json?.data?.data || json?.data || [];
   return Array.isArray(fallback) ? fallback : [];
 }
+
+export default getSheetDataArray;

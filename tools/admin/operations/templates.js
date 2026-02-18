@@ -2,7 +2,7 @@ import {
   fetchTemplatesJSON,
   updateTemplatesJSON,
 } from '../utils/da-api.js';
-import { getSheetDataArray } from '../utils/sheet-json.js';
+import getSheetDataArray from '../utils/sheet-json.js';
 import { mergeLibraryItems, normalizeIdentifier } from './library-items.js';
 
 export async function removeLibraryTemplate(org, site, templateKey) {

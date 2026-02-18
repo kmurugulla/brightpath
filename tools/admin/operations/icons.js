@@ -1,5 +1,5 @@
 import { fetchIconsJSON, updateIconsJSON } from '../utils/da-api.js';
-import { getSheetDataArray } from '../utils/sheet-json.js';
+import getSheetDataArray from '../utils/sheet-json.js';
 import { mergeLibraryItems, normalizeIdentifier } from './library-items.js';
 
 export async function removeLibraryIcon(org, site, iconKey) {

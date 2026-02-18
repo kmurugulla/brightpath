@@ -1,5 +1,5 @@
 import * as daApi from '../utils/da-api.js';
-import { getSheetDataArray } from '../utils/sheet-json.js';
+import getSheetDataArray from '../utils/sheet-json.js';
 
 export async function fetchExistingTemplates(org, site) {
   try {
