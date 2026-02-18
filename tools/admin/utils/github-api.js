@@ -124,9 +124,23 @@ export default class GitHubAPI {
       }
 
       const data = await response.json();
+      const tree = data.tree || [];
+      // eslint-disable-next-line no-console
+      console.log('[Site Admin] GitHub tree API', {
+        org: this.org,
+        repo: this.repo,
+        treeLength: tree.length,
+        truncated: data.truncated === true,
+        pathsSample: tree.slice(0, 15).map((t) => t.path),
+      });
 
       const blocksPattern = /(^|\/)blocks\//;
-      const blockFiles = data.tree.filter((item) => blocksPattern.test(item.path) && item.type === 'tree');
+      const blockFiles = tree.filter((item) => blocksPattern.test(item.path) && item.type === 'tree');
+      // eslint-disable-next-line no-console
+      console.log('[Site Admin] GitHub blocks pattern match', {
+        matchCount: blockFiles.length,
+        matchedPaths: blockFiles.map((t) => t.path),
+      });
 
       const blocks = blockFiles.map((item) => {
         const pathParts = item.path.split('/');

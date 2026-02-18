@@ -8,16 +8,23 @@ import { DOM_IDS, ERROR_KEYS } from '../constants.js';
 export async function discoverBlocks(app, state) {
   state.discovering = true;
   app.render();
+  // eslint-disable-next-line no-console
+  console.log('[Site Admin] discoverBlocks start', { org: state.org, repo: state.repo, site: state.site });
   try {
     const blocks = await githubOps.discoverBlocks(state.org, state.repo, state.githubToken);
+    // eslint-disable-next-line no-console
+    console.log('[Site Admin] GitHub blocks discovered', { count: blocks?.length ?? 0, names: blocks?.map((b) => b.name) ?? [] });
 
     const existingBlocksJSON = await daApi.fetchBlocksJSON(state.org, state.site);
+    const existingData = existingBlocksJSON?.data?.data ?? [];
+    // eslint-disable-next-line no-console
+    console.log('[Site Admin] Library blocks.json', { count: existingData.length, paths: existingData.map((b) => b.path) });
 
     const existingBlockNames = new Set(
-      existingBlocksJSON?.data?.data?.map((b) => {
+      existingData.map((b) => {
         const pathParts = b.path.split('/');
         return pathParts[pathParts.length - 1];
-      }) || [],
+      }),
     );
 
     state.blocks = blocks.map((block) => ({
@@ -33,8 +40,12 @@ export async function discoverBlocks(app, state) {
     const libraryCheck = await libraryOps.checkLibraryExists(state.org, state.site);
     state.libraryExists = libraryCheck.exists;
 
+    // eslint-disable-next-line no-console
+    console.log('[Site Admin] discoverBlocks done', { blocksCount: state.blocks.length, libraryExists: libraryCheck.exists });
     app.render();
   } catch (error) {
+    // eslint-disable-next-line no-console
+    console.log('[Site Admin] discoverBlocks error', error?.message ?? error);
     state.errors.github = `Block discovery failed: ${error.message}`;
     state.discovering = false;
     app.render();
@@ -153,9 +164,13 @@ export async function handleLoadExistingBlocks(state, render) {
 
   state.discovering = true;
   render();
+  // eslint-disable-next-line no-console
+  console.log('[Site Admin] handleLoadExistingBlocks start', { org: state.org, site: state.site });
 
   try {
     const blocks = await libraryOps.fetchExistingBlocks(state.org, state.site);
+    // eslint-disable-next-line no-console
+    console.log('[Site Admin] fetchExistingBlocks result', { count: blocks?.length ?? 0, names: blocks?.map((b) => b.name) ?? [] });
 
     if (blocks.length === 0) {
       state.errors.site = 'No library found at this location. Please run "Library Setup" first to create the library.';
@@ -174,8 +189,12 @@ export async function handleLoadExistingBlocks(state, render) {
     state.errors = {
       github: '', site: '', blocks: '', templates: '', icons: '', placeholders: '', pages: '',
     };
+    // eslint-disable-next-line no-console
+    console.log('[Site Admin] handleLoadExistingBlocks done', { blocksCount: state.blocks.length });
     render();
   } catch (error) {
+    // eslint-disable-next-line no-console
+    console.log('[Site Admin] handleLoadExistingBlocks error', error?.message ?? error);
     state.errors.site = `Failed to load blocks: ${error.message}`;
     state.discovering = false;
     render();

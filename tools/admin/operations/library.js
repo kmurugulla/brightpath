@@ -25,11 +25,20 @@ export async function checkLibraryExists(org, site) {
 }
 
 export async function fetchExistingBlocks(org, site) {
+  // eslint-disable-next-line no-console
+  console.log('[Site Admin] fetchExistingBlocks', { org, site });
   const blocksJSON = await fetchBlocksJSON(org, site);
+  const rawData = blocksJSON?.data?.data;
+  // eslint-disable-next-line no-console
+  console.log('[Site Admin] fetchBlocksJSON response', {
+    hasData: Boolean(blocksJSON?.data),
+    rawCount: Array.isArray(rawData) ? rawData.length : 0,
+    sample: Array.isArray(rawData) ? rawData.slice(0, 3) : null,
+  });
   if (blocksJSON && blocksJSON.data && blocksJSON.data.data) {
     const autoBlocks = new Set(['header', 'footer', 'fragment']);
 
-    return blocksJSON.data.data
+    const out = blocksJSON.data.data
       .filter((block) => {
         const pathParts = block.path.split('/');
         const kebabName = pathParts[pathParts.length - 1];
@@ -40,7 +49,12 @@ export async function fetchExistingBlocks(org, site) {
         path: block.path,
         isAutoBlock: false,
       }));
+    // eslint-disable-next-line no-console
+    console.log('[Site Admin] fetchExistingBlocks returning', { count: out.length, names: out.map((b) => b.name) });
+    return out;
   }
+  // eslint-disable-next-line no-console
+  console.log('[Site Admin] fetchExistingBlocks returning [] (no data)');
   return [];
 }
 

@@ -68,8 +68,12 @@ async function detectAutoBlocks(api) {
 }
 
 export async function discoverBlocks(org, repo, token = null) {
+  // eslint-disable-next-line no-console
+  console.log('[Site Admin] GitHub discoverBlocks', { org, repo, hasToken: Boolean(token) });
   const api = new GitHubAPI(org, repo, 'main', token);
   const allBlocks = await api.discoverBlocks();
+  // eslint-disable-next-line no-console
+  console.log('[Site Admin] GitHub tree blocks (before filter)', { count: allBlocks?.length ?? 0, names: allBlocks?.map((b) => b.name) ?? [] });
 
   const excludedBlocks = new Set(['header', 'footer', 'fragment']);
 
@@ -78,11 +82,15 @@ export async function discoverBlocks(org, repo, token = null) {
     if (autoBlocks.size > 0) {
       autoBlocks.forEach((blockName) => excludedBlocks.add(blockName));
     }
+    // eslint-disable-next-line no-console
+    console.log('[Site Admin] GitHub autoBlocks excluded', [...autoBlocks]);
   } catch (error) {
     // ignore
   }
 
   const filteredBlocks = allBlocks.filter((block) => !excludedBlocks.has(block.name));
+  // eslint-disable-next-line no-console
+  console.log('[Site Admin] GitHub discoverBlocks result', { count: filteredBlocks.length, names: filteredBlocks.map((b) => b.name) });
 
   return filteredBlocks.map((block) => ({
     ...block,
