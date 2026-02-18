@@ -9,16 +9,20 @@ import extractExamplesWithProgress from '../utils/content-extract.js';
 import { analyzeBlock } from '../utils/block-analysis.js';
 import { getContentBlockPath } from '../config.js';
 
+function getBlocksArray(blocksJSON) {
+  const arr = blocksJSON?.data?.data ?? (Array.isArray(blocksJSON?.data) ? blocksJSON.data : null);
+  return Array.isArray(arr) ? arr : [];
+}
+
 export async function checkLibraryExists(org, site) {
   try {
     const blocksJSON = await fetchBlocksJSON(org, site);
-    if (blocksJSON && blocksJSON.data) {
-      return {
-        exists: true,
-        count: blocksJSON.data.total || blocksJSON.data.data?.length || 0,
-      };
-    }
-    return { exists: false, count: 0 };
+    if (!blocksJSON) return { exists: false, count: 0 };
+    const blocksArray = getBlocksArray(blocksJSON);
+    return {
+      exists: true,
+      count: blocksJSON.data?.total ?? blocksArray.length,
+    };
   } catch (error) {
     return { exists: false, count: 0 };
   }
@@ -28,17 +32,22 @@ export async function fetchExistingBlocks(org, site) {
   // eslint-disable-next-line no-console
   console.log('[Site Admin] fetchExistingBlocks', { org, site });
   const blocksJSON = await fetchBlocksJSON(org, site);
-  const rawData = blocksJSON?.data?.data;
+  const rawData = blocksJSON?.data?.data ?? blocksJSON?.data;
+  const isArray = Array.isArray(rawData);
   // eslint-disable-next-line no-console
   console.log('[Site Admin] fetchBlocksJSON response', {
-    hasData: Boolean(blocksJSON?.data),
-    rawCount: Array.isArray(rawData) ? rawData.length : 0,
-    sample: Array.isArray(rawData) ? rawData.slice(0, 3) : null,
+    isNull: blocksJSON === null,
+    keys: blocksJSON ? Object.keys(blocksJSON) : [],
+    hasDataData: Boolean(blocksJSON?.data?.data),
+    hasDataArray: Boolean(blocksJSON?.data && Array.isArray(blocksJSON.data)),
+    rawCount: isArray ? rawData.length : 0,
+    sample: isArray ? rawData.slice(0, 2) : null,
   });
-  if (blocksJSON && blocksJSON.data && blocksJSON.data.data) {
+  const blocksArray = getBlocksArray(blocksJSON);
+  if (blocksJSON && blocksArray.length > 0) {
     const autoBlocks = new Set(['header', 'footer', 'fragment']);
 
-    const out = blocksJSON.data.data
+    const out = blocksArray
       .filter((block) => {
         const pathParts = block.path.split('/');
         const kebabName = pathParts[pathParts.length - 1];
@@ -115,9 +124,7 @@ export async function updateLibraryBlocksJSON(org, site, blockNames) {
 
   try {
     const existingBlocksJSON = await fetchBlocksJSON(org, site);
-    if (existingBlocksJSON?.data?.data) {
-      existingBlocks = existingBlocksJSON.data.data;
-    }
+    existingBlocks = getBlocksArray(existingBlocksJSON);
     if (existingBlocksJSON?.options) {
       existingOptions = existingBlocksJSON.options;
     }

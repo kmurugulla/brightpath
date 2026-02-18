@@ -306,6 +306,8 @@ export async function fetchBlocksJSON(org, site) {
     const response = await daFetch(url);
 
     if (response.status === 404) {
+      // eslint-disable-next-line no-console
+      console.log('[Site Admin] fetchBlocksJSON 404', { path, url: url.replace(/^https:\/\//, '') });
       return null;
     }
 
@@ -313,8 +315,13 @@ export async function fetchBlocksJSON(org, site) {
       throw new Error(`Failed to fetch blocks.json: ${response.status}`);
     }
 
-    return response.json();
+    const body = await response.json();
+    // eslint-disable-next-line no-console
+    console.log('[Site Admin] fetchBlocksJSON 200', { path, topKeys: body ? Object.keys(body) : [] });
+    return body;
   } catch (error) {
+    // eslint-disable-next-line no-console
+    console.log('[Site Admin] fetchBlocksJSON error', { path, message: error?.message });
     return null;
   }
 }
