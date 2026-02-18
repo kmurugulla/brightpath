@@ -35,23 +35,31 @@ const app = {
       throw new Error('App container not found');
     }
 
-    try {
-      const { context, token } = await DA_SDK;
-      state.daToken = token;
+    const params = new URLSearchParams(window.location.search);
+    const queryOrg = params.get('org');
+    const querySite = params.get('site');
+    if (queryOrg && querySite) {
+      state.org = queryOrg;
+      state.site = querySite;
+    } else {
+      try {
+        const { context, token } = await DA_SDK;
+        state.daToken = token;
 
-      if (context?.org) {
-        state.org = context.org;
-      }
+        if (context?.org) {
+          state.org = context.org;
+        }
 
-      if (context?.repo) {
-        state.site = context.repo;
-      }
-    } catch (error) {
-      const urlMatch = window.location.pathname.match(/^\/app\/([^/]+)\/([^/]+)/);
-      if (urlMatch) {
-        const [, org, site] = urlMatch;
-        state.org = org;
-        state.site = site;
+        if (context?.repo) {
+          state.site = context.repo;
+        }
+      } catch (error) {
+        const urlMatch = window.location.pathname.match(/^\/app\/([^/]+)\/([^/]+)/);
+        if (urlMatch) {
+          const [, org, site] = urlMatch;
+          state.org = org;
+          state.site = site;
+        }
       }
     }
 
