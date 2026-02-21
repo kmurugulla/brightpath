@@ -3,7 +3,7 @@
 /* eslint-disable import/no-unresolved */
 import DA_SDK from 'https://da.live/nx/utils/sdk.js';
 
-import state, { resetModeState, clearErrors } from './state.js';
+import state, { resetModeState } from './state.js';
 import * as templates from './templates.js';
 import * as daApi from '../utils/da-api.js';
 import TokenStorage from '../utils/token-storage.js';
