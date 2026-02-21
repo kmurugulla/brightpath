@@ -215,7 +215,10 @@ async function loadEager(doc) {
   if (main) {
     decorateMain(main);
     doc.body.classList.add('appear');
-    await loadSection(main.querySelector('.section'), waitForFirstImage);
+    await loadSection(main.querySelector('.section'), (section) => {
+      if (document.body.classList.contains('quick-edit')) return Promise.resolve();
+      return waitForFirstImage(section);
+    });
   }
 
   sampleRUM.enhance();
@@ -249,6 +252,25 @@ async function loadLazy(doc) {
 
   loadCSS(`${window.hlx.codeBasePath}/styles/lazy-styles.css`);
   loadFonts();
+
+  const loadQuickEdit = async (...args) => {
+    // eslint-disable-next-line import/no-cycle
+    const { default: initQuickEdit } = await import('../tools/quick-edit/quick-edit.js');
+    initQuickEdit(...args);
+  };
+
+  const addSidekickListeners = (sk) => {
+    sk.addEventListener('custom:quick-edit', loadQuickEdit);
+  };
+
+  const sk = document.querySelector('aem-sidekick');
+  if (sk) {
+    addSidekickListeners(sk);
+  } else {
+    document.addEventListener('sidekick-ready', () => {
+      addSidekickListeners(document.querySelector('aem-sidekick'));
+    }, { once: true });
+  }
 }
 
 /**
@@ -271,7 +293,7 @@ async function loadSidekick() {
   });
 }
 
-async function loadPage() {
+export async function loadPage() {
   await loadEager(document);
   await loadLazy(document);
   loadDelayed();
