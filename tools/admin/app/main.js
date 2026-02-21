@@ -163,7 +163,6 @@ const app = {
       org: state.org,
       site: state.site,
       message: state.errors[ERROR_KEYS.SITE] ? templates.messageTemplate(state.errors[ERROR_KEYS.SITE], 'error') : '',
-      libraryExists: state.libraryExists,
     }));
 
     if (!state.libraryExists) {
@@ -209,7 +208,6 @@ const app = {
 
     if (hasContent && !state.processStatus?.completed) {
       sections.push(templates.startButtonTemplate({
-        libraryExists: state.libraryExists,
         disabled: state.processing,
         processing: state.processing,
       }));

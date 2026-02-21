@@ -205,11 +205,6 @@ export function attachBlocksListeners(app, state) {
     validateRepoBtn.addEventListener('click', () => validateRepository(app, state));
   }
 
-  const loadExistingBlocksBtn = document.getElementById(DOM_IDS.LOAD_EXISTING_BLOCKS);
-  if (loadExistingBlocksBtn) {
-    loadExistingBlocksBtn.addEventListener('click', () => handleLoadExistingBlocks(state, () => app.render()));
-  }
-
   const validateWithTokenBtn = document.getElementById(DOM_IDS.VALIDATE_WITH_TOKEN);
   if (validateWithTokenBtn) {
     validateWithTokenBtn.addEventListener('click', () => handleValidateWithToken(app, state));

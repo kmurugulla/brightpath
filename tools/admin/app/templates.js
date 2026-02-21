@@ -128,7 +128,7 @@ export function discoverNewBlocksSectionTemplate({
     <div class="form-section discover-new-blocks-section">
       <h2>Add blocks from code</h2>
       <p class="form-section-subtitle">
-        Added a new block in the repo? Enter the GitHub URL and discover it so you can add it to the library.
+        Scans the GitHub repo for block folders. Blocks that aren't in the library yet appear as "New" in the list below so you can add them.
       </p>
       <div class="form-row repo-input-row">
         <input
@@ -258,7 +258,6 @@ export function siteSectionTemplate({
   org,
   site,
   message,
-  libraryExists = false,
 }) {
   return `
     <div class="form-section">
@@ -286,13 +285,6 @@ export function siteSectionTemplate({
           />
         </div>
       </div>
-      ${libraryExists ? `
-        <div class="form-row button-row">
-          <button type="button" id="load-existing-blocks" class="action">
-            Load library blocks
-          </button>
-        </div>
-      ` : ''}
 
       ${message}
     </div>
@@ -406,13 +398,8 @@ export function pagesSelectionTemplate({
   `;
 }
 
-export function startButtonTemplate({ libraryExists = false, disabled = false, processing = false }) {
-  let buttonText = 'Set Up Library';
-  if (processing) {
-    buttonText = 'Processing...';
-  } else if (libraryExists) {
-    buttonText = 'Update Examples';
-  }
+export function startButtonTemplate({ disabled = false, processing = false }) {
+  const buttonText = processing ? 'Processing...' : 'Set up Blocks';
 
   return `
     <div class="form-section">
