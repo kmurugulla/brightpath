@@ -108,7 +108,7 @@ const app = {
 
     this.attachEventListeners();
 
-    if (state.mode === MODES.REFRESH && state.org && state.site) {
+    if (state.libraryExists && state.org && state.site) {
       await this.handleLoadExistingBlocks();
     }
   },
@@ -127,8 +127,7 @@ const app = {
       const check = await libraryOps.checkLibraryExists(state.org, state.site);
       state.libraryExists = check.exists;
       state.mode = state.libraryExists ? MODES.REFRESH : MODES.SETUP;
-      if (state.mode === MODES.REFRESH) {
-        // handleLoadExistingBlocks calls render() internally — let it own the render
+      if (state.libraryExists) {
         await blocksHandlers.handleLoadExistingBlocks(state, () => this.render());
         return;
       }
@@ -136,11 +135,11 @@ const app = {
 
     const cssToLoad = [];
 
-    if (state.mode === MODES.SETUP && !state.repositoryValidated) {
+    if (!state.libraryExists || state.blocksDiscovered) {
       cssToLoad.push(loadCSS('github-section.css'));
     }
 
-    if (state.blocksDiscovered || state.mode === MODES.REFRESH) {
+    if (state.blocksDiscovered || state.libraryExists) {
       cssToLoad.push(loadCSS('blocks-section.css'));
     }
 
@@ -156,15 +155,18 @@ const app = {
 
     sections.push(templates.sectionHeaderTemplate({
       title: 'Blocks',
-      description: 'Generate block documentation for your DA.live library from GitHub repositories. Choose between initial setup mode or update existing blocks with new content examples.',
+      description: 'Generate block documentation for your DA.live library. First time: enter site and GitHub repo to set up. Existing library: load blocks or add new ones from code, then update examples.',
       docsUrl: 'https://docs.da.live/administrators/guides/setup-library',
     }));
 
-    sections.push(templates.modeToggleTemplate({
-      currentMode: state.mode,
+    sections.push(templates.siteSectionTemplate({
+      org: state.org,
+      site: state.site,
+      message: state.errors[ERROR_KEYS.SITE] ? templates.messageTemplate(state.errors[ERROR_KEYS.SITE], 'error') : '',
+      libraryExists: state.libraryExists,
     }));
 
-    if (state.mode === MODES.SETUP) {
+    if (!state.libraryExists) {
       sections.push(templates.githubSectionTemplate({
         isValidated: state.repositoryValidated,
         validating: state.validating,
@@ -177,14 +179,10 @@ const app = {
           hasSavedToken: TokenStorage.exists(),
         }));
       }
-    }
-
-    if ((state.mode === MODES.SETUP && state.repositoryValidated) || state.mode === MODES.REFRESH) {
-      sections.push(templates.siteSectionTemplate({
-        org: state.org,
-        site: state.site,
-        message: state.errors[ERROR_KEYS.SITE] ? templates.messageTemplate(state.errors[ERROR_KEYS.SITE], 'error') : '',
-        mode: state.mode,
+    } else {
+      sections.push(templates.discoverNewBlocksSectionTemplate({
+        githubUrl: state.githubUrl || '',
+        message: state.errors[ERROR_KEYS.GITHUB] ? templates.messageTemplate(state.errors[ERROR_KEYS.GITHUB], 'error') : '',
       }));
     }
 
@@ -202,7 +200,7 @@ const app = {
           message: state.errors[ERROR_KEYS.PAGES] ? templates.messageTemplate(state.errors[ERROR_KEYS.PAGES], 'error') : '',
           daToken: state.daToken,
           org: state.org,
-          mode: state.mode,
+          libraryExists: state.libraryExists,
         }));
       }
     }
@@ -211,7 +209,7 @@ const app = {
 
     if (hasContent && !state.processStatus?.completed) {
       sections.push(templates.startButtonTemplate({
-        mode: state.mode,
+        libraryExists: state.libraryExists,
         disabled: state.processing,
         processing: state.processing,
       }));
@@ -228,9 +226,8 @@ const app = {
     } else if (state.selectedBlocks.size > 0) {
       sections.push(templates.initialStatusTemplate({
         org: state.org,
-        repo: state.repo,
+        repo: state.repo || state.site,
         blocksCount: state.blocks.length,
-        mode: state.mode,
         libraryExists: state.libraryExists,
       }));
     }
@@ -487,20 +484,11 @@ const app = {
   },
 
   attachEventListeners() {
-    document.querySelectorAll('.mode-btn').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        const newMode = e.target.dataset.mode;
-        if (newMode !== state.mode) {
-          this.handleModeChange(newMode);
-        }
-      });
-    });
-
     const githubUrlInput = document.getElementById(DOM_IDS.GITHUB_URL);
     if (githubUrlInput && !state.repositoryValidated) {
       githubUrlInput.addEventListener('input', (e) => {
         state.githubUrl = e.target.value;
-        state.errors.github = '';
+        state.errors[ERROR_KEYS.GITHUB] = '';
       });
 
       githubUrlInput.addEventListener('blur', (e) => this.handleGitHubUrlChange(e.target.value));
@@ -513,12 +501,36 @@ const app = {
       });
     }
 
+    const discoverNewBlocksBtn = document.getElementById(DOM_IDS.DISCOVER_NEW_BLOCKS);
+    if (discoverNewBlocksBtn) {
+      discoverNewBlocksBtn.addEventListener('click', async () => {
+        const url = document.getElementById(DOM_IDS.GITHUB_URL)?.value?.trim();
+        if (!url) {
+          state.errors[ERROR_KEYS.GITHUB] = 'Enter a GitHub repository URL';
+          this.render();
+          return;
+        }
+        await blocksHandlers.handleGitHubUrlChange(state, () => this.render(), url);
+        await blocksHandlers.validateRepository(this, state);
+        if (state.repositoryValidated) {
+          blocksHandlers.selectNewBlocksOnly(state, () => this.render());
+        }
+      });
+    }
+
     const orgInput = document.getElementById(DOM_IDS.ORG_NAME);
     if (orgInput) {
       orgInput.addEventListener('input', (e) => {
         state.org = e.target.value.trim();
         state.errors[ERROR_KEYS.SITE] = '';
         state.blocksDefaultModeSet = false;
+        resetModeState(false);
+      });
+      orgInput.addEventListener('blur', () => {
+        if (state.org && state.site) {
+          state.blocksDefaultModeSet = false;
+          this.render();
+        }
       });
     }
 
@@ -528,6 +540,13 @@ const app = {
         state.site = e.target.value.trim();
         state.errors[ERROR_KEYS.SITE] = '';
         state.blocksDefaultModeSet = false;
+        resetModeState(false);
+      });
+      siteInput.addEventListener('blur', () => {
+        if (state.org && state.site) {
+          state.blocksDefaultModeSet = false;
+          this.render();
+        }
       });
     }
 
@@ -576,28 +595,6 @@ const app = {
       errorsCard.style.cursor = 'pointer';
       errorsCard.addEventListener('click', () => this.showErrorModal());
     }
-  },
-
-  async handleModeChange(newMode) {
-    state.mode = newMode;
-    state.message = '';
-    state.messageType = 'info';
-    clearErrors();
-
-    if (newMode === MODES.REFRESH) {
-      resetModeState();
-      this.render();
-      if (state.org && state.site) {
-        await this.handleLoadExistingBlocks();
-      }
-      return;
-    }
-
-    if (newMode === MODES.SETUP) {
-      resetModeState(true);
-    }
-
-    this.render();
   },
 
   async handleGitHubUrlChange(url) {

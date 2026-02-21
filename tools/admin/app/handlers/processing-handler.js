@@ -1,7 +1,7 @@
 import * as libraryOps from '../../operations/library.js';
 import GitHubAPI from '../../utils/github-api.js';
 import * as pagePickerHandlers from './page-picker-handler.js';
-import { PROGRESS_STEPS, ERROR_KEYS } from '../constants.js';
+import { PROGRESS_STEPS, ERROR_KEYS, MODES } from '../constants.js';
 
 /**
  * Builds the initial processStatus object based on what content is selected.
@@ -32,7 +32,7 @@ function buildInitialStatus(state) {
     baseStatus.placeholders = { processed: 0, total: state.selectedPlaceholders.length, status: 'pending' };
   }
 
-  if (state.mode === 'setup') {
+  if (!state.libraryExists) {
     baseStatus.siteConfig = { status: 'pending', message: '' };
 
     if (state.selectedBlocks.size > 0) {
@@ -193,7 +193,7 @@ export async function handleStartProcessing(app, state) {
     }));
 
     let githubApi = null;
-    if (state.mode === 'setup' && state.org && state.repo) {
+    if (state.org && state.repo) {
       githubApi = new GitHubAPI(state.org, state.repo, 'main', state.githubToken);
     }
 
@@ -206,7 +206,7 @@ export async function handleStartProcessing(app, state) {
       placeholders: state.selectedPlaceholders,
       sitesWithPages,
       onProgress: (progress) => handleProgress(progress, state, () => app.render()),
-      skipSiteConfig: state.mode === 'refresh',
+      skipSiteConfig: state.libraryExists,
       githubApi,
     });
 
@@ -220,6 +220,10 @@ export async function handleStartProcessing(app, state) {
     state.selectedPlaceholders = [];
     state.message = '';
     state.messageType = '';
+    if (!state.libraryExists) {
+      state.libraryExists = true;
+      state.mode = MODES.REFRESH;
+    }
   } catch (error) {
     state.processStatus.errors.count += 1;
     state.processStatus.errors.messages.push({

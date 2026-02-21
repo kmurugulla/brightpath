@@ -1,5 +1,6 @@
 import {
   registerLibrary,
+  ensureLibraryRegistered,
   fetchBlocksJSON,
   updateBlocksJSON,
   batchUploadBlocks,
@@ -174,7 +175,13 @@ export async function setupLibrary({
   };
 
   try {
-    if (!skipSiteConfig) {
+    if (skipSiteConfig) {
+      // Refresh mode: ensure library sheet exists in config (repair if missing)
+      const ensured = await ensureLibraryRegistered(org, site);
+      if (!ensured.success) {
+        throw new Error(`Failed to ensure library in config: ${ensured.error}`);
+      }
+    } else {
       onProgress?.({ step: 'register', status: 'start' });
       const registration = await setupLibraryConfig(org, site);
       if (!registration.success) {

@@ -641,6 +641,21 @@ export async function registerLibrary(org, site) {
   }
 }
 
+/**
+ * Ensure the library sheet exists in site config; register it if missing.
+ * Use in Refresh mode so config is repaired when library folder exists but config was never set.
+ * @param {string} org
+ * @param {string} site
+ * @returns {Promise<{ success: boolean, created?: boolean, error?: string }>}
+ */
+export async function ensureLibraryRegistered(org, site) {
+  const config = await fetchSiteConfig(org, site);
+  if (config?.library) {
+    return { success: true, created: false };
+  }
+  return registerLibrary(org, site);
+}
+
 export async function registerTemplatesInConfig(org, site) {
   try {
     const config = await fetchSiteConfig(org, site);

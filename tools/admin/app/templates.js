@@ -120,19 +120,28 @@ export function sectionHeaderTemplate({ title, description, docsUrl }) {
   `;
 }
 
-export function modeToggleTemplate({ currentMode }) {
+export function discoverNewBlocksSectionTemplate({
+  githubUrl = '',
+  message = '',
+}) {
   return `
-    <div class="mode-toggle">
-      <button 
-        class="mode-btn ${currentMode === 'setup' ? 'active' : ''}"
-        data-mode="setup">
-        Library Setup
-      </button>
-      <button 
-        class="mode-btn ${currentMode === 'refresh' ? 'active' : ''}"
-        data-mode="refresh">
-        Update Examples
-      </button>
+    <div class="form-section discover-new-blocks-section">
+      <h2>Add blocks from code</h2>
+      <p class="form-section-subtitle">
+        Added a new block in the repo? Enter the GitHub URL and discover it so you can add it to the library.
+      </p>
+      <div class="form-row repo-input-row">
+        <input
+          type="url"
+          id="github-url"
+          placeholder="https://github.com/{owner}/{repo}"
+          value="${escapeHtml(githubUrl)}"
+        />
+        <button type="button" id="discover-new-blocks" class="accent">
+          Discover new blocks
+        </button>
+      </div>
+      ${message}
     </div>
   `;
 }
@@ -249,32 +258,41 @@ export function siteSectionTemplate({
   org,
   site,
   message,
-  mode = 'setup',
+  libraryExists = false,
 }) {
-  const isRefreshMode = mode === 'refresh';
-
   return `
     <div class="form-section">
+      <h2>DA.live site</h2>
+      <p class="form-section-subtitle">
+        Organization and site where the library lives (or will be created).
+      </p>
       <div class="form-row org-site-row">
         <div class="input-group">
           <label>Organization</label>
           <input
             type="text"
+            id="org-name"
             value="${escapeHtml(org)}"
-            readonly
-            class="readonly-input"
+            placeholder="org-name"
           />
         </div>
         <div class="input-group">
           <label>Site</label>
           <input
             type="text"
-            ${isRefreshMode ? '' : 'id="site-name"'}
+            id="site-name"
             value="${escapeHtml(site)}"
-            ${isRefreshMode ? 'readonly class="readonly-input"' : 'placeholder="site-name"'}
+            placeholder="site-name"
           />
         </div>
       </div>
+      ${libraryExists ? `
+        <div class="form-row button-row">
+          <button type="button" id="load-existing-blocks" class="action">
+            Load library blocks
+          </button>
+        </div>
+      ` : ''}
 
       ${message}
     </div>
@@ -338,15 +356,13 @@ export function pagesSelectionTemplate({
   message,
   daToken,
   org,
-  mode = 'setup',
+  libraryExists = false,
 }) {
-  const isRefreshMode = mode === 'refresh';
-
   return `
     <div class="form-section">
-      <h2>Sample Pages <span class="heading-annotation">${isRefreshMode ? '' : '(Optional)'}</span></h2>
+      <h2>Sample Pages <span class="heading-annotation">${libraryExists ? '' : '(Optional)'}</span></h2>
       <p class="form-section-subtitle">
-        ${isRefreshMode
+        ${libraryExists
     ? 'Select pages to extract real block examples from. Only blocks found in these pages will be updated.'
     : 'Select pages to extract real block examples from. Skip to use placeholder content.'}
       </p>
@@ -390,11 +406,11 @@ export function pagesSelectionTemplate({
   `;
 }
 
-export function startButtonTemplate({ mode, disabled = false, processing = false }) {
+export function startButtonTemplate({ libraryExists = false, disabled = false, processing = false }) {
   let buttonText = 'Set Up Library';
   if (processing) {
     buttonText = 'Processing...';
-  } else if (mode === 'refresh') {
+  } else if (libraryExists) {
     buttonText = 'Update Examples';
   }
 
@@ -413,7 +429,6 @@ export function initialStatusTemplate({
   org,
   repo,
   blocksCount,
-  mode = 'setup',
   libraryExists = false,
 }) {
   return `
@@ -445,8 +460,8 @@ export function initialStatusTemplate({
           </div>
         </div>
 
-        <!-- Site Config (Green) - Only shown in setup mode -->
-        ${mode === 'setup' ? `
+        <!-- Site Config (Green) - Only when doing full setup -->
+        ${!libraryExists ? `
           <div class="import-card import-card-green import-card-pending">
             <div class="import-card-header">
               <h3>Site Config</h3>

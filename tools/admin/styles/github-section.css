@@ -5,6 +5,11 @@
   gap: var(--spacing-200);
 }
 
+.repo-input-row input {
+  flex: 1;
+  min-width: 0;
+}
+
 .org-site-row {
   display: grid;
   grid-template-columns: 1fr 1fr;

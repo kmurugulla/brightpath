@@ -50,6 +50,7 @@ export const DOM_IDS = {
   CLEAR_TOKEN: 'clear-token',
   VALIDATE_REPOSITORY: 'validate-repository',
   VALIDATE_WITH_TOKEN: 'validate-with-token',
+  DISCOVER_NEW_BLOCKS: 'discover-new-blocks',
   LOAD_EXISTING_BLOCKS: 'load-existing-blocks',
   TOGGLE_ALL_BLOCKS: 'toggle-all-blocks',
   SELECT_NEW_ONLY: 'select-new-only',
