@@ -1,0 +1,315 @@
+/* ========== Base & Variables ========== */
+
+:root {
+  /* Gray Scale */
+  --s2-gray-50: #f9fafb;
+  --s2-gray-100: #f3f4f6;
+  --s2-gray-200: #e5e7eb;
+  --s2-gray-300: #d1d5db;
+  --s2-gray-400: #9ca3af;
+  --s2-gray-500: #6b7280;
+  --s2-gray-600: #4b5563;
+  --s2-gray-700: #374151;
+  --s2-gray-900: #111827;
+
+  /* Blue Scale */
+  --s2-blue-50: #eff6ff;
+  --s2-blue-100: #dbeafe;
+  --s2-blue-200: #bfdbfe;
+  --s2-blue-300: #93c5fd;
+  --s2-blue-500: #3b82f6;
+  --s2-blue-600: #2563eb;
+  --s2-blue-700: #1d4ed8;
+  --s2-blue-900: #1e3a8a;
+
+  /* Green Scale */
+  --s2-green-100: rgb(215 247 225);
+  --s2-green-900: #065f46;
+
+  /* Red Scale */
+  --s2-red-100: rgb(255 214 209);
+  --s2-red-700: #991b1b;
+
+  /* Spacing */
+  --spacing-100: 4px;
+  --spacing-200: 8px;
+  --spacing-300: 12px;
+  --spacing-400: 16px;
+  --spacing-500: 24px;
+  --spacing-600: 32px;
+  --spacing-700: 40px;
+
+  /* Border Radius */
+  --s2-radius-100: 4px;
+  --s2-radius-200: 8px;
+  --s2-radius-300: 18px;
+
+  /* Typography */
+  --body-font-family: 'Adobe Clean', adobe-clean, 'Trebuchet MS', sans-serif;
+  --mono-font-family: 'Roboto Mono', menlo, consolas, 'Liberation Mono', monospace;
+  --s2-font-size-200: 14px;
+  --s2-font-size-300: 16px;
+  --s2-font-size-400: 16px;
+  --s2-font-size-600: 24px;
+  --s2-font-size-700: 32px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--body-font-family);
+  color: var(--s2-gray-900);
+  line-height: 1.6;
+  margin: 0;
+  padding: 0;
+  background: var(--s2-gray-50);
+}
+
+#app {
+  max-width: 1200px;
+  margin: var(--spacing-700) auto;
+  padding: 0 var(--spacing-400);
+}
+
+h1 {
+  font-size: var(--s2-font-size-700);
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0 0 var(--spacing-200);
+  color: var(--s2-gray-900);
+}
+
+h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 var(--spacing-400);
+  color: var(--s2-gray-900);
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 var(--spacing-300);
+  color: var(--s2-gray-900);
+}
+
+p {
+  font-size: var(--s2-font-size-400);
+  color: var(--s2-gray-600);
+  margin: 0 0 var(--spacing-600);
+}
+
+/* ========== Status Panel ========== */
+
+.status-panel {
+  background: white;
+  border: 1px solid var(--s2-gray-200);
+  border-radius: var(--s2-radius-200);
+  padding: var(--spacing-500);
+  margin-bottom: var(--spacing-600);
+}
+
+.status-loading {
+  padding: var(--spacing-600);
+  text-align: center;
+  color: var(--s2-gray-600);
+  background: white;
+  border: 1px solid var(--s2-gray-200);
+  border-radius: var(--s2-radius-200);
+  margin-bottom: var(--spacing-600);
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-500);
+}
+
+.status-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-100);
+}
+
+.status-item label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--s2-gray-400);
+  letter-spacing: 1px;
+}
+
+.status-item span {
+  font-size: var(--s2-font-size-300);
+  color: var(--s2-gray-900);
+  font-weight: 500;
+}
+
+/* ========== Actions ========== */
+
+.actions {
+  margin-bottom: var(--spacing-600);
+}
+
+button,
+.button {
+  font-family: var(--body-font-family);
+  font-size: 15px;
+  font-weight: 700;
+  padding: 8px 24px;
+  line-height: 18px;
+  border: 2px solid #000;
+  color: #000;
+  border-radius: var(--s2-radius-300);
+  background: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+button:disabled {
+  background-color: #efefef;
+  border: 2px solid #efefef;
+  color: var(--s2-gray-700);
+  cursor: not-allowed;
+}
+
+button:hover:not(:disabled) {
+  background: var(--s2-gray-100);
+}
+
+button.accent,
+.btn-primary {
+  background: #3b63fb;
+  border: 2px solid #3b63fb;
+  color: #fff;
+}
+
+button.accent:hover:not(:disabled),
+.btn-primary:hover:not(:disabled) {
+  background: #2952e8;
+  border: 2px solid #2952e8;
+}
+
+/* ========== Progress Section ========== */
+
+.progress-section {
+  background: white;
+  border: 1px solid var(--s2-gray-200);
+  border-radius: var(--s2-radius-200);
+  padding: var(--spacing-500);
+  margin-bottom: var(--spacing-600);
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--s2-gray-200);
+  border-radius: var(--s2-radius-100);
+  overflow: hidden;
+  margin-bottom: var(--spacing-300);
+}
+
+.progress-fill {
+  height: 100%;
+  background: #3b63fb;
+  transition: width 0.3s ease;
+}
+
+.progress-info {
+  display: flex;
+  gap: var(--spacing-300);
+  align-items: center;
+  font-size: var(--s2-font-size-200);
+}
+
+.progress-stage {
+  font-weight: 600;
+  color: var(--s2-gray-900);
+  text-transform: capitalize;
+}
+
+.progress-message {
+  color: var(--s2-gray-600);
+  flex: 1;
+}
+
+.progress-timing {
+  display: flex;
+  gap: var(--spacing-500);
+  margin-top: var(--spacing-200);
+  font-size: var(--s2-font-size-200);
+  color: var(--s2-gray-500);
+}
+
+/* ========== Logs Section ========== */
+
+.logs-section,
+.errors-section {
+  background: white;
+  border: 1px solid var(--s2-gray-200);
+  border-radius: var(--s2-radius-200);
+  padding: var(--spacing-500);
+  margin-bottom: var(--spacing-600);
+}
+
+.logs-list,
+.errors-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.logs-list li,
+.errors-list li {
+  padding: var(--spacing-200) var(--spacing-300);
+  margin-bottom: var(--spacing-100);
+  border-radius: var(--s2-radius-100);
+  font-size: 13px;
+  font-family: var(--mono-font-family);
+}
+
+.log-info {
+  background: var(--s2-gray-100);
+  color: var(--s2-gray-900);
+}
+
+.log-success {
+  background: var(--s2-green-100);
+  color: var(--s2-green-900);
+}
+
+.log-error,
+.errors-list li {
+  background: var(--s2-red-100);
+  color: var(--s2-red-700);
+}
+
+/* ========== Error Page ========== */
+
+.error {
+  background: white;
+  border: 1px solid var(--s2-gray-200);
+  border-radius: var(--s2-radius-200);
+  padding: var(--spacing-700);
+  text-align: center;
+}
+
+.error h1 {
+  color: var(--s2-red-700);
+}
+
+.error pre {
+  background: var(--s2-gray-100);
+  padding: var(--spacing-400);
+  border-radius: var(--s2-radius-100);
+  text-align: left;
+  display: inline-block;
+  margin-top: var(--spacing-400);
+  font-family: var(--mono-font-family);
+  font-size: 13px;
+}
